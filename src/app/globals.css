@@ -1,0 +1,228 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-figtree);
+  --font-mono: var(--font-jetbrains);
+  --font-display: var(--font-syne);
+  --font-heading: var(--font-syne);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-gold: var(--gold);
+  --color-gold-foreground: var(--gold-foreground);
+  --color-forest: var(--forest);
+  --color-mist: var(--mist);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+  --background: #e7ece9;
+  --foreground: #0c1612;
+  --card: #f2f5f3;
+  --card-foreground: #0c1612;
+  --popover: #f2f5f3;
+  --popover-foreground: #0c1612;
+  --primary: #0f3d2e;
+  --primary-foreground: #eef3f0;
+  --secondary: #d5ddd8;
+  --secondary-foreground: #0f3d2e;
+  --muted: #d9e0dc;
+  --muted-foreground: #4f5c56;
+  --accent: #b08d1f;
+  --accent-foreground: #0c1612;
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: #c5cec8;
+  --input: #c5cec8;
+  --ring: #b08d1f;
+  --gold: #b08d1f;
+  --gold-foreground: #0c1612;
+  --forest: #0f3d2e;
+  --mist: #dfe6e2;
+  --chart-1: #0f3d2e;
+  --chart-2: #b08d1f;
+  --chart-3: #2f6b55;
+  --chart-4: #5a7a8a;
+  --chart-5: #4f5c56;
+  --radius: 0.5rem;
+  --sidebar: #f2f5f3;
+  --sidebar-foreground: #0c1612;
+  --sidebar-primary: #0f3d2e;
+  --sidebar-primary-foreground: #eef3f0;
+  --sidebar-accent: #d9e0dc;
+  --sidebar-accent-foreground: #0f3d2e;
+  --sidebar-border: #c5cec8;
+  --sidebar-ring: #b08d1f;
+}
+
+.dark {
+  --background: #0b1210;
+  --foreground: #e8eee9;
+  --card: #121a17;
+  --card-foreground: #e8eee9;
+  --popover: #121a17;
+  --popover-foreground: #e8eee9;
+  --primary: #d4b45a;
+  --primary-foreground: #0b1210;
+  --secondary: #1a2420;
+  --secondary-foreground: #e8eee9;
+  --muted: #1a2420;
+  --muted-foreground: #9aaba2;
+  --accent: #b08d1f;
+  --accent-foreground: #0b1210;
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: #24302b;
+  --input: #24302b;
+  --ring: #b08d1f;
+  --gold: #d4b45a;
+  --gold-foreground: #0b1210;
+  --forest: #8fbfa8;
+  --mist: #121a17;
+  --chart-1: #8fbfa8;
+  --chart-2: #d4b45a;
+  --chart-3: #2f6b55;
+  --chart-4: #5a7a8a;
+  --chart-5: #9aaba2;
+  --sidebar: #121a17;
+  --sidebar-foreground: #e8eee9;
+  --sidebar-primary: #d4b45a;
+  --sidebar-primary-foreground: #0b1210;
+  --sidebar-accent: #1a2420;
+  --sidebar-accent-foreground: #e8eee9;
+  --sidebar-border: #24302b;
+  --sidebar-ring: #b08d1f;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans scroll-smooth;
+  }
+}
+
+@keyframes lynx-rise {
+  from {
+    opacity: 0;
+    transform: translateY(1.25rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes lynx-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes lynx-pan {
+  from {
+    transform: scale(1.08) translate3d(0, 0, 0);
+  }
+  to {
+    transform: scale(1) translate3d(0, -1.5%, 0);
+  }
+}
+
+@keyframes lynx-line {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.animate-lynx-rise {
+  animation: lynx-rise 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.animate-lynx-fade {
+  animation: lynx-fade 1.1s ease both;
+}
+
+.animate-lynx-pan {
+  animation: lynx-pan 14s ease-out both;
+}
+
+.animate-lynx-line {
+  animation: lynx-line 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.45s both;
+  transform-origin: left;
+}
+
+.delay-1 {
+  animation-delay: 0.12s;
+}
+.delay-2 {
+  animation-delay: 0.28s;
+}
+.delay-3 {
+  animation-delay: 0.44s;
+}
+.delay-4 {
+  animation-delay: 0.6s;
+}
+
+.grain {
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.55'/%3E%3C/svg%3E");
+}
+
+.lynx-grid {
+  background-image:
+    linear-gradient(to right, color-mix(in oklab, var(--forest) 12%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in oklab, var(--forest) 12%, transparent) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+
+.dark .lynx-grid {
+  background-image:
+    linear-gradient(to right, rgba(212, 180, 90, 0.08) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(212, 180, 90, 0.08) 1px, transparent 1px);
+}
