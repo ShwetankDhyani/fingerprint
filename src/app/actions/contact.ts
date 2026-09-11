@@ -6,6 +6,7 @@ import { clientIpFromHeaders, rateLimit } from "@/lib/rate-limit";
 import { contactSchema, type ContactInput } from "@/lib/schemas/contact";
 import { sanitizeEmail, sanitizeText } from "@/lib/sanitize";
 import { insertLead } from "@/lib/supabase/admin";
+import { notifyLeadReceived } from "@/lib/whatsapp/dispatch";
 
 export type ContactActionState = {
   ok: boolean;
@@ -18,6 +19,7 @@ function sanitizeLead(raw: ContactInput): ContactInput {
   return {
     name: sanitizeText(raw.name, 120),
     email: sanitizeEmail(raw.email),
+    phone: sanitizeText(raw.phone, 20),
     company: sanitizeText(raw.company, 160),
     projectType: sanitizeText(raw.projectType, 80),
     budget: sanitizeText(raw.budget, 80),
@@ -46,6 +48,7 @@ export async function submitProjectInquiry(
   const raw = {
     name: String(formData.get("name") ?? ""),
     email: String(formData.get("email") ?? ""),
+    phone: String(formData.get("phone") ?? ""),
     company: String(formData.get("company") ?? ""),
     projectType: String(formData.get("projectType") ?? ""),
     budget: String(formData.get("budget") ?? ""),
@@ -74,6 +77,7 @@ export async function submitProjectInquiry(
     const stored = await insertLead({
       name: lead.name,
       email: lead.email,
+      phone: lead.phone,
       company: lead.company,
       projectType: lead.projectType,
       budget: lead.budget,
@@ -95,6 +99,16 @@ export async function submitProjectInquiry(
 
     if (mail.error) {
       console.error("[contact] email error", mail.error);
+    }
+
+    const wa = await notifyLeadReceived({
+      phone: lead.phone,
+      name: lead.name,
+      company: lead.company,
+      selectedPlan: lead.selectedPlan,
+    });
+    if (wa.error) {
+      console.error("[contact] whatsapp error", wa.error);
     }
 
     return {

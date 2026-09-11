@@ -31,6 +31,12 @@ export const timelines = [
 export const contactSchema = z.object({
   name: z.string().trim().min(2, "Name needs at least 2 characters."),
   email: z.string().trim().email("Enter a valid work email."),
+  phone: z
+    .string()
+    .trim()
+    .min(8, "Enter a WhatsApp / mobile number with country code.")
+    .max(20, "Phone looks too long.")
+    .regex(/^[+0-9\s()-]+$/, "Use digits with an optional + country code."),
   company: z.string().trim().min(1, "Company or project name helps us triage."),
   projectType: z.string().min(1, "Pick a project type."),
   budget: z.string().min(1, "Select a budget tier."),

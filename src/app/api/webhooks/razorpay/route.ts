@@ -3,6 +3,7 @@ import {
   verifyRazorpayWebhookSignature,
 } from "@/lib/payments/razorpay";
 import { markTransactionPaid } from "@/lib/supabase/admin";
+import { notifyPaymentReceived } from "@/lib/whatsapp/dispatch";
 
 export async function POST(request: Request) {
   const rawBody = await request.text();
@@ -44,6 +45,21 @@ export async function POST(request: Request) {
         providerPaymentId: payment?.id,
         raw: payload as unknown as Record<string, unknown>,
       });
+
+      if ((result.updated || result.mocked) && !result.alreadyPaid) {
+        const tx = result.transaction;
+        const wa = await notifyPaymentReceived({
+          phone: tx?.customer_phone,
+          name: tx?.customer_name,
+          planName: tx?.plan_name ?? "your Lynx plan",
+          amountMinor: tx?.amount_minor ?? 0,
+          currency: tx?.currency ?? "INR",
+          invoiceNumber: tx?.invoice_number,
+        });
+        if (wa.error) {
+          console.error("[webhooks/razorpay] whatsapp error", wa.error);
+        }
+      }
 
       return NextResponse.json({
         received: true,

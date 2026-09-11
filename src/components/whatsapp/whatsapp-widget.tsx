@@ -22,6 +22,8 @@ export function WhatsAppWidget() {
             ? "a project brief"
             : "a custom web development project";
 
+  if (pathname.startsWith("/admin")) return null;
+
   const href = buildWhatsAppUrl(defaultWhatsAppMessage(context));
 
   return (

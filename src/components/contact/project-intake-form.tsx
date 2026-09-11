@@ -44,6 +44,7 @@ export function ProjectIntakeForm({
     defaultValues: {
       name: "",
       email: "",
+      phone: "",
       company: "",
       projectType: selected ? "plan-booking" : addon ? "addon" : "",
       budget: selected ? `plan-${selected.slug}` : "",
@@ -157,6 +158,18 @@ export function ProjectIntakeForm({
             {...register("email")}
           />
         </Field>
+        <Field id="phone" label="WhatsApp / mobile" error={errors.phone?.message}>
+          <Input
+            id="phone"
+            type="tel"
+            autoComplete="tel"
+            placeholder="+91 98XXX XXXXX"
+            disabled={pending}
+            aria-invalid={!!errors.phone}
+            {...register("phone")}
+          />
+        </Field>
+
         <Field
           id="company"
           label="Company / project"

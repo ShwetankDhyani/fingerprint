@@ -10,7 +10,7 @@ Production marketing + transactional platform for **Lynx Web Solutions** ([lynxw
 - Resend + React Email
 - Supabase (Postgres + RLS)
 - Razorpay (India) + Stripe (global)
-- WhatsApp click-to-chat
+- WhatsApp click-to-chat + Cloud API automation (mockable without keys)
 
 ## Run locally
 
@@ -35,6 +35,8 @@ Without payment/email/DB secrets, the app still runs: leads log locally, checkou
 | Razorpay webhook | `POST /api/webhooks/razorpay` |
 | Stripe webhook | `POST /api/webhooks/stripe` |
 | SQL schema + RLS | `supabase/schema.sql` |
+| WhatsApp dispatch | `src/lib/whatsapp/` |
+| Admin toggles + quotes/invoices | `/admin` |
 
 ## Production checklist
 
@@ -42,7 +44,9 @@ Without payment/email/DB secrets, the app still runs: leads log locally, checkou
 2. Fill `.env.local` / hosting env from `.env.example`.
 3. Point Razorpay + Stripe webhooks at your production `/api/webhooks/*` URLs.
 4. Confirm Resend domain/from address is verified.
-5. Keep `RAZORPAY_KEY_SECRET`, `STRIPE_SECRET_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` server-only.
+5. Keep `RAZORPAY_KEY_SECRET`, `STRIPE_SECRET_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, and `WHATSAPP_ACCESS_TOKEN` server-only.
+6. Set `ADMIN_PASSWORD` and open `/admin` to toggle WhatsApp events.
+7. Add Meta WhatsApp Cloud API credentials when ready — until then, sends are mocked safely.
 
 ## Scripts
 

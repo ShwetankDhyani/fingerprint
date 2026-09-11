@@ -17,6 +17,7 @@ export type LeadRow = {
   scope: string;
   status: "new" | "contacted" | "converted" | "archived";
   source: string;
+  phone: string | null;
   meta: Record<string, unknown>;
 };
 
@@ -67,6 +68,7 @@ export async function insertLead(input: {
   timeline: string;
   selectedPlan?: string;
   scope: string;
+  phone?: string;
   source?: string;
   meta?: Record<string, unknown>;
 }): Promise<{ id: string | null; mocked: boolean; error?: string }> {
@@ -91,6 +93,7 @@ export async function insertLead(input: {
       timeline: input.timeline,
       selected_plan: input.selectedPlan ?? null,
       scope: input.scope,
+      phone: input.phone ?? null,
       status: "new",
       source: input.source ?? "contact_form",
       meta: input.meta ?? {},
@@ -170,14 +173,22 @@ export async function markTransactionPaid(input: {
   providerPaymentId?: string;
   providerSessionId?: string;
   raw?: Record<string, unknown>;
-}): Promise<{ updated: boolean; alreadyPaid: boolean; mocked: boolean }> {
+}): Promise<{
+  updated: boolean;
+  alreadyPaid: boolean;
+  mocked: boolean;
+  transaction?: TransactionRow | null;
+}> {
   const client = getSupabaseAdmin();
   if (!client) {
     console.info("[transactions] mark paid (mock)", input);
-    return { updated: true, alreadyPaid: false, mocked: true };
+    return { updated: true, alreadyPaid: false, mocked: true, transaction: null };
   }
 
-  let query = client.from("transactions").select("id, status").eq("provider", input.provider);
+  const selectCols =
+    "id, created_at, updated_at, provider, status, plan_slug, plan_name, amount_minor, currency, customer_name, customer_email, customer_phone, invoice_number, provider_order_id, provider_payment_id, provider_session_id, idempotency_key, lead_id, raw";
+
+  let query = client.from("transactions").select(selectCols).eq("provider", input.provider);
 
   if (input.providerPaymentId) {
     query = query.eq("provider_payment_id", input.providerPaymentId);
@@ -186,13 +197,18 @@ export async function markTransactionPaid(input: {
   } else if (input.providerSessionId) {
     query = query.eq("provider_session_id", input.providerSessionId);
   } else {
-    return { updated: false, alreadyPaid: false, mocked: false };
+    return { updated: false, alreadyPaid: false, mocked: false, transaction: null };
   }
 
   const { data: existing } = await query.maybeSingle();
 
   if (existing?.status === "paid") {
-    return { updated: false, alreadyPaid: true, mocked: false };
+    return {
+      updated: false,
+      alreadyPaid: true,
+      mocked: false,
+      transaction: existing as TransactionRow,
+    };
   }
 
   const patch: Record<string, unknown> = {
@@ -203,7 +219,11 @@ export async function markTransactionPaid(input: {
   if (input.providerOrderId) patch.provider_order_id = input.providerOrderId;
   if (input.providerSessionId) patch.provider_session_id = input.providerSessionId;
 
-  let update = client.from("transactions").update(patch).eq("provider", input.provider);
+  let update = client
+    .from("transactions")
+    .update(patch)
+    .eq("provider", input.provider)
+    .select(selectCols);
   if (existing?.id) {
     update = update.eq("id", existing.id);
   } else if (input.providerOrderId) {
@@ -212,11 +232,16 @@ export async function markTransactionPaid(input: {
     update = update.eq("provider_session_id", input.providerSessionId);
   }
 
-  const { error } = await update;
+  const { data: updatedRow, error } = await update.maybeSingle();
   if (error) {
     console.error("[transactions] mark paid failed", error.message);
-    return { updated: false, alreadyPaid: false, mocked: false };
+    return { updated: false, alreadyPaid: false, mocked: false, transaction: null };
   }
 
-  return { updated: true, alreadyPaid: false, mocked: false };
+  return {
+    updated: true,
+    alreadyPaid: false,
+    mocked: false,
+    transaction: (updatedRow as TransactionRow | null) ?? null,
+  };
 }
