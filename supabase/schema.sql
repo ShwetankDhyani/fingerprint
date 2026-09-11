@@ -18,7 +18,6 @@ create table if not exists public.leads (
   status text not null default 'new'
     check (status in ('new', 'contacted', 'converted', 'archived')),
   source text not null default 'contact_form',
-  phone text,
   meta jsonb not null default '{}'::jsonb
 );
 
@@ -30,7 +29,7 @@ create table if not exists public.transactions (
   id uuid primary key default gen_random_uuid(),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  provider text not null check (provider in ('razorpay', 'stripe')),
+  provider text not null check (provider in ('cashfree')),
   status text not null default 'pending'
     check (status in ('pending', 'paid', 'failed', 'refunded')),
   plan_slug text not null,
@@ -89,45 +88,8 @@ create trigger transactions_set_updated_at
   before update on public.transactions
   for each row execute function public.set_updated_at();
 
-
--- WhatsApp notification toggles + quotation/invoice documents
-
-create table if not exists public.app_settings (
-  key text primary key,
-  value jsonb not null default '{}'::jsonb,
-  updated_at timestamptz not null default now()
-);
-
-alter table public.app_settings enable row level security;
-
-create table if not exists public.documents (
-  id uuid primary key default gen_random_uuid(),
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now(),
-  type text not null check (type in ('quotation', 'invoice')),
-  number text not null unique,
-  public_token text not null unique,
-  customer_name text not null,
-  customer_phone text not null,
-  customer_email text,
-  company text,
-  amount_minor integer not null check (amount_minor > 0),
-  currency text not null,
-  summary text not null,
-  status text not null default 'sent'
-    check (status in ('draft', 'sent', 'accepted', 'paid', 'void'))
-);
-
-create index if not exists documents_created_at_idx on public.documents (created_at desc);
-create index if not exists documents_type_idx on public.documents (type);
-create index if not exists documents_customer_phone_idx on public.documents (customer_phone);
-
-alter table public.documents enable row level security;
-
-drop trigger if exists documents_set_updated_at on public.documents;
-create trigger documents_set_updated_at
-  before update on public.documents
-  for each row execute function public.set_updated_at();
-
--- Optional: add phone to existing leads deployments
-alter table public.leads add column if not exists phone text;
+-- If you already applied an older schema, narrow/widen the provider check:
+-- alter table public.transactions drop constraint if exists transactions_provider_check;
+-- alter table public.transactions
+--   add constraint transactions_provider_check
+--   check (provider in ('cashfree'));

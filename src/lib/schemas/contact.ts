@@ -1,5 +1,8 @@
 import { z } from "zod";
 
+import { isValidInternationalPhone } from "@/lib/phone";
+
+/** Kept for admin filters / legacy lead rows — not required on the public form. */
 export const budgetTiers = [
   { value: "plan-starter", label: "Plan: Starter (₹14,999)" },
   { value: "plan-growth", label: "Plan: Growth (₹34,999)" },
@@ -28,25 +31,28 @@ export const timelines = [
   { value: "exploring", label: "Exploring / planning" },
 ] as const;
 
+/**
+ * Public enquiry — short on purpose so cold traffic can start a conversation.
+ * Optional plan context may arrive from /contact?plan=… as a hidden field.
+ */
 export const contactSchema = z.object({
   name: z.string().trim().min(2, "Name needs at least 2 characters."),
   email: z.string().trim().email("Enter a valid work email."),
   phone: z
     .string()
     .trim()
-    .min(8, "Enter a WhatsApp / mobile number with country code.")
-    .max(20, "Phone looks too long.")
-    .regex(/^[+0-9\s()-]+$/, "Use digits with an optional + country code."),
-  company: z.string().trim().min(1, "Company or project name helps us triage."),
-  projectType: z.string().min(1, "Pick a project type."),
-  budget: z.string().min(1, "Select a budget tier."),
-  timeline: z.string().min(1, "Select a timeline."),
-  selectedPlan: z.string().optional(),
-  scope: z
+    .min(1, "Mobile number is required.")
+    .refine(
+      (value) => isValidInternationalPhone(value),
+      "Enter a valid mobile number with country code.",
+    ),
+  message: z
     .string()
     .trim()
-    .min(40, "Give us ~2–3 sentences on goals, stack, and constraints.")
-    .max(4000, "Keep it under 4000 characters."),
+    .min(10, "Tell us a little about what you need (a sentence is enough).")
+    .max(2000, "Keep it under 2000 characters."),
+  selectedPlan: z.string().optional(),
+  company: z.string().trim().max(160).optional(),
 });
 
 export type ContactInput = z.infer<typeof contactSchema>;

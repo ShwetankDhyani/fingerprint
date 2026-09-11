@@ -93,6 +93,7 @@
 }
 
 .dark {
+  color-scheme: dark;
   --background: #0b1210;
   --foreground: #e8eee9;
   --card: #121a17;
@@ -139,6 +140,29 @@
   }
   html {
     @apply font-sans scroll-smooth;
+  }
+
+  /*
+   * Native <select> menus inherit page text color. On dark portal pages that
+   * means white labels on the browser's white option list. Force a dark
+   * scheme and explicit option colours so every dropdown stays readable.
+   */
+  .dark select,
+  [data-portal] select {
+    color-scheme: dark;
+  }
+
+  .dark select option,
+  [data-portal] select option {
+    background-color: #121a17 !important;
+    color: #e8eee9 !important;
+  }
+
+  .dark input[type="date"],
+  .dark input[type="time"],
+  [data-portal] input[type="date"],
+  [data-portal] input[type="time"] {
+    color-scheme: dark;
   }
 }
 
@@ -225,4 +249,128 @@
   background-image:
     linear-gradient(to right, rgba(212, 180, 90, 0.08) 1px, transparent 1px),
     linear-gradient(to bottom, rgba(212, 180, 90, 0.08) 1px, transparent 1px);
+}
+
+/* 2011 GIF shimmer, restaged so light can only land on ink.
+   Mark sheen is a champagne duplicate of the mark alone, revealed through
+   a CSS mask on an HTML wrapper — the wrapper contains only the mark SVG,
+   so the gap beside the type can never light up.
+   Name sheen uses background-clip:text — glyphs only. */
+.lynx-logo__mark-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.lynx-logo__mark-sheen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  color: #f0df9a;
+  pointer-events: none;
+  opacity: 0;
+  -webkit-mask-image: linear-gradient(
+    100deg,
+    transparent 38%,
+    #000 50%,
+    transparent 62%
+  );
+  mask-image: linear-gradient(
+    100deg,
+    transparent 38%,
+    #000 50%,
+    transparent 62%
+  );
+  -webkit-mask-size: 240% 100%;
+  mask-size: 240% 100%;
+  -webkit-mask-position: 140% 0;
+  mask-position: 140% 0;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+}
+
+.dark .lynx-logo__mark-sheen {
+  color: #fff8e0;
+}
+
+.lynx-logo__name {
+  color: var(--forest);
+  background-image: linear-gradient(
+    100deg,
+    var(--forest) 0%,
+    var(--forest) 42%,
+    #f3e2a0 50%,
+    var(--forest) 58%,
+    var(--forest) 100%
+  );
+  background-size: 220% 100%;
+  background-position: 100% 0;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.dark .lynx-logo__name {
+  color: var(--gold);
+  background-image: linear-gradient(
+    100deg,
+    var(--gold) 0%,
+    var(--gold) 42%,
+    #fff8e0 50%,
+    var(--gold) 58%,
+    var(--gold) 100%
+  );
+}
+
+.lynx-logo__tag {
+  transition: color 0.35s ease;
+}
+
+@keyframes lynx-type-sheen {
+  from { background-position: 100% 0; }
+  to { background-position: 0% 0; }
+}
+
+@keyframes lynx-mark-sheen {
+  from {
+    opacity: 0;
+    -webkit-mask-position: 140% 0;
+    mask-position: 140% 0;
+  }
+  18%, 78% {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+    -webkit-mask-position: -40% 0;
+    mask-position: -40% 0;
+  }
+}
+
+.lynx-logo:hover .lynx-logo__name,
+.lynx-logo:focus-visible .lynx-logo__name {
+  animation: lynx-type-sheen 0.95s cubic-bezier(0.32, 0, 0.28, 1);
+}
+
+.lynx-logo:hover .lynx-logo__tag,
+.lynx-logo:focus-visible .lynx-logo__tag {
+  color: color-mix(in oklab, var(--forest) 55%, var(--muted-foreground));
+}
+
+.dark .lynx-logo:hover .lynx-logo__tag,
+.dark .lynx-logo:focus-visible .lynx-logo__tag {
+  color: color-mix(in oklab, var(--gold) 45%, var(--muted-foreground));
+}
+
+.lynx-logo:hover .lynx-logo__mark-sheen,
+.lynx-logo:focus-visible .lynx-logo__mark-sheen {
+  animation: lynx-mark-sheen 0.95s cubic-bezier(0.32, 0, 0.28, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lynx-logo:hover .lynx-logo__name,
+  .lynx-logo:focus-visible .lynx-logo__name,
+  .lynx-logo:hover .lynx-logo__mark-sheen,
+  .lynx-logo:focus-visible .lynx-logo__mark-sheen {
+    animation: none;
+  }
 }

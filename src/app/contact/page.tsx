@@ -1,18 +1,20 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { ProjectIntakeForm } from "@/components/contact/project-intake-form";
 import { SectionHeading } from "@/components/ui/section-heading";
 import { getPlanBySlug, sellableAddOns } from "@/lib/plans";
+import { resolveDefaultPhoneCountry } from "@/lib/phone";
 import { siteConfig } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "Contact",
   description:
-    "Start a project or book a website plan with Lynx Web Solutions. Share scope, budget tier, and timeline — we reply within one business day.",
+    "Start a project or book a website plan with Lynx Web Solutions. Tell us who you are and what you need — we reply within one business day.",
   alternates: { canonical: "/contact" },
   openGraph: {
     title: `Contact | ${siteConfig.name}`,
     description:
-      "High-end project intake for websites, SaaS, ecommerce, SEO, and packaged plans.",
+      "Start a conversation about websites, SaaS, ecommerce, SEO, or a packaged plan.",
     url: `${siteConfig.url}/contact`,
   },
 };
@@ -32,6 +34,8 @@ export default async function ContactPage({
   const params = await searchParams;
   const plan = getPlanBySlug(params.plan);
   const addon = sellableAddOns.find((item) => item.slug === params.addon);
+  const headerStore = await headers();
+  const defaultPhoneCountry = resolveDefaultPhoneCountry(headerStore);
 
   return (
     <section className="relative overflow-hidden bg-background">
@@ -51,10 +55,10 @@ export default async function ContactPage({
             }
             description={
               plan
-                ? `${plan.priceLabel} · ${plan.delivery}. Fill the intake and we’ll confirm scope, then share payment / kickoff steps.`
+                ? `Project total ${plan.priceLabel} · ${plan.paymentTerms} · ${plan.delivery}. Fill the intake and we’ll confirm scope, then share the advance invoice / kickoff steps.`
                 : addon
                   ? `${addon.summary} Tell us which site this attaches to and we’ll quote turnaround.`
-                  : "Frictionless intake — scope, budget tier, timeline, and technical notes. Or pick a packaged plan from Plans."
+                  : "A short note is enough to start. Prefer a packaged website? Book an advance on Plans."
             }
           />
           <div className="mt-10 space-y-4 text-sm text-muted-foreground">
@@ -89,6 +93,7 @@ export default async function ContactPage({
         <ProjectIntakeForm
           defaultPlanSlug={plan?.slug}
           defaultAddonSlug={addon?.slug}
+          defaultPhoneCountry={defaultPhoneCountry}
         />
       </div>
     </section>

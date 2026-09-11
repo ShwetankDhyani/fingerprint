@@ -1,5 +1,7 @@
+import Image from "next/image";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { LynxMark } from "@/components/brand/lynx-mark";
 import { Reveal } from "@/components/motion/reveal";
 import { SectionHeading } from "@/components/ui/section-heading";
 import { buttonVariants } from "@/components/ui/button";
@@ -63,6 +65,37 @@ export default function AboutPage() {
               <h2 className="font-display text-3xl tracking-tight text-forest dark:text-foreground">
                 Engineering discipline. Direct execution.
               </h2>
+              <div className="mt-10 flex flex-col gap-6 sm:flex-row sm:items-end">
+                <div className="flex items-end gap-5">
+                  <LynxMark className="h-20 w-auto text-forest dark:text-gold" />
+                  <div>
+                    <p className="font-display text-xs tracking-[0.18em] text-muted-foreground uppercase">
+                      Today
+                    </p>
+                    <p className="mt-1 text-sm text-muted-foreground">Vector mark</p>
+                  </div>
+                </div>
+                <div className="h-px w-10 bg-border sm:h-10 sm:w-px" />
+                <div>
+                  <p className="font-display text-xs tracking-[0.18em] text-muted-foreground uppercase">
+                    Heritage
+                  </p>
+                  <div className="relative mt-2 h-14 w-44 overflow-hidden rounded-md bg-white p-2 shadow-sm ring-1 ring-border/60 sm:h-16 sm:w-52 dark:bg-card">
+                    <Image
+                      src="/brand/lynx-logo-heritage.png"
+                      alt="Original Lynx Web Solutions logo from the early web era"
+                      fill
+                      className="object-contain p-2"
+                      sizes="208px"
+                    />
+                  </div>
+                </div>
+              </div>
+              <p className="mt-5 max-w-sm text-sm leading-relaxed text-muted-foreground">
+                The calligraphic lynx from our earliest mark — redrawn stroke by
+                stroke as a crisp vector. The old GIF shimmer returns on hover,
+                riding the brushwork itself. Same face. Sharper coat.
+              </p>
             </Reveal>
             <Reveal delay={0.08}>
               <div className="space-y-5 text-muted-foreground leading-relaxed sm:text-lg">

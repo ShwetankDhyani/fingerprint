@@ -1,61 +1,85 @@
 import { createEnv } from "@t3-oss/env-nextjs";
 import { z } from "zod";
 
+import { siteConfig } from "@/lib/site";
+
+/** Treat empty/placeholder strings as unset so optional URL secrets never crash boot. */
+const optionalUrl = z.preprocess((value) => {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  if (!trimmed || trimmed === "[SENSITIVE]" || !/^https?:\/\//i.test(trimmed)) {
+    return undefined;
+  }
+  return trimmed;
+}, z.string().url().optional());
+
+const optionalSecret = z.preprocess((value) => {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  if (!trimmed || trimmed === "[SENSITIVE]") return undefined;
+  return trimmed;
+}, z.string().min(1).optional());
+
 /**
  * Server secrets never reach the client.
  * Optional vars enable graceful local/mock fallbacks when unset.
  */
 export const env = createEnv({
   server: {
-    NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
-    RESEND_API_KEY: z.string().min(1).optional(),
-    EMAIL_FROM: z.string().min(3).optional(),
-    EMAIL_TO_TEAM: z.string().email().optional(),
-    SUPABASE_URL: z.string().url().optional(),
-    SUPABASE_SERVICE_ROLE_KEY: z.string().min(1).optional(),
-    RAZORPAY_KEY_ID: z.string().min(1).optional(),
-    RAZORPAY_KEY_SECRET: z.string().min(1).optional(),
-    RAZORPAY_WEBHOOK_SECRET: z.string().min(1).optional(),
-    STRIPE_SECRET_KEY: z.string().min(1).optional(),
-    STRIPE_WEBHOOK_SECRET: z.string().min(1).optional(),
-    /** Meta WhatsApp Cloud API — optional until Business account is ready. */
-    WHATSAPP_ACCESS_TOKEN: z.string().min(1).optional(),
-    WHATSAPP_PHONE_NUMBER_ID: z.string().min(1).optional(),
-    WHATSAPP_BUSINESS_ACCOUNT_ID: z.string().min(1).optional(),
-    WHATSAPP_API_VERSION: z.string().min(1).optional(),
-    /** Shared secret for /admin (required in production for the panel). */
-    ADMIN_PASSWORD: z.string().min(8).optional(),
+    NODE_ENV: z
+      .enum(["development", "test", "production"])
+      .default("development"),
+    RESEND_API_KEY: optionalSecret,
+    /** Full SMTP URL fallback, e.g. smtps://user:pass@smtp.zoho.in:465 */
+    SMTP_URL: optionalSecret,
+    // Allow "Name <email@domain>" as well as bare emails.
+    EMAIL_FROM: optionalSecret,
+    EMAIL_REPLY_TO: optionalSecret,
+    EMAIL_TO_TEAM: optionalSecret,
+    SUPABASE_URL: optionalUrl,
+    SUPABASE_SERVICE_ROLE_KEY: optionalSecret,
+    CASHFREE_APP_ID: optionalSecret,
+    CASHFREE_SECRET_KEY: optionalSecret,
+    CASHFREE_ENV: z.enum(["sandbox", "production"]).optional(),
+    CRON_SECRET: optionalSecret,
+    WHATSAPP_ACCESS_TOKEN: optionalSecret,
+    WHATSAPP_PHONE_NUMBER_ID: optionalSecret,
+    WHATSAPP_PAYMENT_TEMPLATE: optionalSecret,
+    WHATSAPP_TEMPLATE_LANG: optionalSecret,
   },
   client: {
-    NEXT_PUBLIC_SUPABASE_URL: z.string().url().optional(),
-    NEXT_PUBLIC_SUPABASE_ANON_KEY: z.string().min(1).optional(),
-    NEXT_PUBLIC_RAZORPAY_KEY_ID: z.string().min(1).optional(),
-    NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: z.string().min(1).optional(),
-    NEXT_PUBLIC_WHATSAPP_NUMBER: z.string().min(8).optional(),
-    NEXT_PUBLIC_SITE_URL: z.string().url().optional(),
+    NEXT_PUBLIC_SUPABASE_URL: optionalUrl,
+    NEXT_PUBLIC_SUPABASE_ANON_KEY: optionalSecret,
+    NEXT_PUBLIC_CASHFREE_MODE: z.enum(["sandbox", "production"]).optional(),
+    NEXT_PUBLIC_WHATSAPP_NUMBER: optionalSecret,
+    NEXT_PUBLIC_SITE_URL: optionalUrl,
   },
   runtimeEnv: {
     NODE_ENV: process.env.NODE_ENV,
     RESEND_API_KEY: process.env.RESEND_API_KEY,
+    SMTP_URL: process.env.SMTP_URL,
     EMAIL_FROM: process.env.EMAIL_FROM,
+    EMAIL_REPLY_TO: process.env.EMAIL_REPLY_TO,
     EMAIL_TO_TEAM: process.env.EMAIL_TO_TEAM,
     SUPABASE_URL: process.env.SUPABASE_URL,
     SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
-    RAZORPAY_KEY_ID: process.env.RAZORPAY_KEY_ID,
-    RAZORPAY_KEY_SECRET: process.env.RAZORPAY_KEY_SECRET,
-    RAZORPAY_WEBHOOK_SECRET: process.env.RAZORPAY_WEBHOOK_SECRET,
-    STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY,
-    STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET,
+    CASHFREE_APP_ID: process.env.CASHFREE_APP_ID,
+    CASHFREE_SECRET_KEY: process.env.CASHFREE_SECRET_KEY,
+    CASHFREE_ENV: process.env.CASHFREE_ENV as
+      | "sandbox"
+      | "production"
+      | undefined,
+    CRON_SECRET: process.env.CRON_SECRET,
     WHATSAPP_ACCESS_TOKEN: process.env.WHATSAPP_ACCESS_TOKEN,
     WHATSAPP_PHONE_NUMBER_ID: process.env.WHATSAPP_PHONE_NUMBER_ID,
-    WHATSAPP_BUSINESS_ACCOUNT_ID: process.env.WHATSAPP_BUSINESS_ACCOUNT_ID,
-    WHATSAPP_API_VERSION: process.env.WHATSAPP_API_VERSION,
-    ADMIN_PASSWORD: process.env.ADMIN_PASSWORD,
+    WHATSAPP_PAYMENT_TEMPLATE: process.env.WHATSAPP_PAYMENT_TEMPLATE,
+    WHATSAPP_TEMPLATE_LANG: process.env.WHATSAPP_TEMPLATE_LANG,
     NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
     NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-    NEXT_PUBLIC_RAZORPAY_KEY_ID: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
-    NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY:
-      process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY,
+    NEXT_PUBLIC_CASHFREE_MODE: process.env.NEXT_PUBLIC_CASHFREE_MODE as
+      | "sandbox"
+      | "production"
+      | undefined,
     NEXT_PUBLIC_WHATSAPP_NUMBER: process.env.NEXT_PUBLIC_WHATSAPP_NUMBER,
     NEXT_PUBLIC_SITE_URL: process.env.NEXT_PUBLIC_SITE_URL,
   },
@@ -63,26 +87,67 @@ export const env = createEnv({
   skipValidation: process.env.SKIP_ENV_VALIDATION === "1",
 });
 
+const DEFAULT_FROM = `${siteConfig.name} <noreply@lynxweb.in>`;
+
+export type EmailSettings = {
+  provider: "resend" | "smtp" | "none";
+  from: string;
+  replyTo: string;
+  teamInbox: string;
+  resendApiKey?: string;
+  smtpUrl?: string;
+};
+
+/**
+ * Resolves the outbound mail configuration.
+ * A sender address always exists; only the transport can be missing.
+ */
+export function emailSettings(): EmailSettings {
+  const resendApiKey = env.RESEND_API_KEY ?? process.env.RESEND_API_KEY;
+  const smtpUrl = env.SMTP_URL ?? process.env.SMTP_URL;
+  const provider = resendApiKey ? "resend" : smtpUrl ? "smtp" : "none";
+
+  return {
+    provider,
+    from: env.EMAIL_FROM ?? process.env.EMAIL_FROM ?? DEFAULT_FROM,
+    replyTo:
+      env.EMAIL_REPLY_TO ?? process.env.EMAIL_REPLY_TO ?? siteConfig.email,
+    teamInbox:
+      env.EMAIL_TO_TEAM ?? process.env.EMAIL_TO_TEAM ?? siteConfig.email,
+    resendApiKey: resendApiKey ?? undefined,
+    smtpUrl: smtpUrl ?? undefined,
+  };
+}
+
 export function isEmailConfigured() {
-  return Boolean(env.RESEND_API_KEY && env.EMAIL_FROM && env.EMAIL_TO_TEAM);
+  return emailSettings().provider !== "none";
+}
+
+export function siteUrl() {
+  const configured =
+    env.NEXT_PUBLIC_SITE_URL ?? process.env.NEXT_PUBLIC_SITE_URL;
+  let url = (configured || siteConfig.url).replace(/\/$/, "");
+  // Never emit localhost recovery links from production / Vercel builds
+  // (Supabase dashboard Site URL is often still http://localhost:3000).
+  if (
+    (process.env.VERCEL_ENV === "production" ||
+      process.env.NODE_ENV === "production") &&
+    /localhost|127\.0\.0\.1/i.test(url)
+  ) {
+    url = siteConfig.url.replace(/\/$/, "");
+  }
+  return url;
 }
 
 export function isSupabaseConfigured() {
-  return Boolean(env.SUPABASE_URL && env.SUPABASE_SERVICE_ROLE_KEY);
+  // Prefer validated env, but also accept raw process.env in case values were
+  // added after a stale build artifact / edge cold-start quirk.
+  return Boolean(
+    (env.SUPABASE_URL || process.env.SUPABASE_URL) &&
+      (env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY),
+  );
 }
 
-export function isRazorpayConfigured() {
-  return Boolean(env.RAZORPAY_KEY_ID && env.RAZORPAY_KEY_SECRET);
-}
-
-export function isStripeConfigured() {
-  return Boolean(env.STRIPE_SECRET_KEY);
-}
-
-export function isWhatsAppApiConfigured() {
-  return Boolean(env.WHATSAPP_ACCESS_TOKEN && env.WHATSAPP_PHONE_NUMBER_ID);
-}
-
-export function isAdminConfigured() {
-  return Boolean(env.ADMIN_PASSWORD && env.ADMIN_PASSWORD.length >= 8);
+export function isCashfreeConfigured() {
+  return Boolean(env.CASHFREE_APP_ID && env.CASHFREE_SECRET_KEY);
 }

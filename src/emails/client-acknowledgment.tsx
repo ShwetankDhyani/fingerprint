@@ -39,7 +39,7 @@ export function ClientAcknowledgmentEmail({
           ) : null}
           <Text style={styles.text}>
             Prefer WhatsApp in the meantime? Reply to this email or message us
-            on the number listed on lynxwebsolutions.com.
+            on the number listed at www.lynxweb.in.
           </Text>
           <Hr style={styles.hr} />
           <Text style={styles.footer}>Lynx Web Solutions · Since 2011</Text>

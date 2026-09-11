@@ -2,29 +2,32 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useState, useTransition } from "react";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
+import type { CountryCode } from "libphonenumber-js";
+
 import { submitProjectInquiry } from "@/app/actions/contact";
+import { PhoneInput } from "@/components/contact/phone-input";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { getPlanBySlug, sellableAddOns } from "@/lib/plans";
+import { formatPhoneDisplay } from "@/lib/phone";
 import {
-  budgetTiers,
   contactSchema,
-  projectTypes,
-  timelines,
   type ContactInput,
 } from "@/lib/schemas/contact";
-import { buildWhatsAppUrl, leadWhatsAppMessage } from "@/lib/whatsapp";
+import { buildWhatsAppUrl, leadWhatsAppMessage } from "@/lib/whatsapp-link";
 import { cn } from "@/lib/utils";
 
 export function ProjectIntakeForm({
   defaultPlanSlug,
   defaultAddonSlug,
+  defaultPhoneCountry = "IN",
 }: {
   defaultPlanSlug?: string;
   defaultAddonSlug?: string;
+  defaultPhoneCountry?: CountryCode;
 }) {
   const selected = getPlanBySlug(defaultPlanSlug);
   const addon = sellableAddOns.find((item) => item.slug === defaultAddonSlug);
@@ -34,6 +37,7 @@ export function ProjectIntakeForm({
 
   const {
     register,
+    control,
     handleSubmit,
     reset,
     getValues,
@@ -45,16 +49,13 @@ export function ProjectIntakeForm({
       name: "",
       email: "",
       phone: "",
-      company: "",
-      projectType: selected ? "plan-booking" : addon ? "addon" : "",
-      budget: selected ? `plan-${selected.slug}` : "",
-      timeline: selected?.slug === "starter" ? "asap" : selected ? "1-3-months" : "",
-      selectedPlan: selected?.planCode ?? addon?.title ?? "",
-      scope: selected
-        ? `I'd like to book the ${selected.name} plan (${selected.priceLabel}). Goals and requirements: `
+      message: selected
+        ? `I'd like to book the ${selected.name} plan (${selected.priceLabel}). `
         : addon
-          ? `I'd like to add "${addon.title}" to my engagement. ${addon.summary} Details: `
+          ? `I'd like to add "${addon.title}" to my engagement. `
           : "",
+      selectedPlan: selected?.planCode ?? addon?.title ?? "",
+      company: "",
     },
   });
 
@@ -98,9 +99,7 @@ export function ProjectIntakeForm({
         <p className="font-display text-2xl tracking-tight text-forest dark:text-gold">
           Inquiry received.
         </p>
-        <p className="mt-3 max-w-md text-muted-foreground">
-          {serverMessage}
-        </p>
+        <p className="mt-3 max-w-md text-muted-foreground">{serverMessage}</p>
         <Button
           type="button"
           variant="outline"
@@ -128,7 +127,8 @@ export function ProjectIntakeForm({
             Booking: {selected.name}
           </p>
           <p className="mt-1 text-muted-foreground">
-            {selected.priceLabel} · {selected.delivery}
+            Total {selected.priceLabel} · Advance {selected.advanceLabel} ·{" "}
+            {selected.delivery}
           </p>
           <input type="hidden" {...register("selectedPlan")} />
         </div>
@@ -158,109 +158,50 @@ export function ProjectIntakeForm({
             {...register("email")}
           />
         </Field>
-        <Field id="phone" label="WhatsApp / mobile" error={errors.phone?.message}>
-          <Input
-            id="phone"
-            type="tel"
-            autoComplete="tel"
-            placeholder="+91 98XXX XXXXX"
-            disabled={pending}
-            aria-invalid={!!errors.phone}
-            {...register("phone")}
-          />
-        </Field>
-
         <Field
-          id="company"
-          label="Company / project"
-          error={errors.company?.message}
+          id="phone"
+          label="Mobile number"
+          error={errors.phone?.message}
           className="sm:col-span-2"
         >
-          <Input
-            id="company"
-            autoComplete="organization"
-            placeholder="Acme Labs"
-            disabled={pending}
-            aria-invalid={!!errors.company}
-            {...register("company")}
+          <Controller
+            name="phone"
+            control={control}
+            render={({ field }) => (
+              <PhoneInput
+                id="phone"
+                disabled={pending}
+                defaultCountry={defaultPhoneCountry}
+                value={field.value}
+                onChange={field.onChange}
+                onBlur={field.onBlur}
+                aria-invalid={!!errors.phone}
+              />
+            )}
           />
+          <p className="text-muted-foreground mt-1.5 text-xs">
+            Include your country code so we can reach you on call or WhatsApp.
+          </p>
         </Field>
         <Field
-          id="projectType"
-          label="Project type"
-          error={errors.projectType?.message}
-        >
-          <select
-            id="projectType"
-            className="border-input bg-background h-8 w-full rounded-lg border px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
-            disabled={pending}
-            aria-invalid={!!errors.projectType}
-            {...register("projectType")}
-          >
-            <option value="">Select type</option>
-            {projectTypes.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field id="budget" label="Budget / plan" error={errors.budget?.message}>
-          <select
-            id="budget"
-            className="border-input bg-background h-8 w-full rounded-lg border px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
-            disabled={pending}
-            aria-invalid={!!errors.budget}
-            {...register("budget")}
-          >
-            <option value="">Select budget</option>
-            {budgetTiers.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field
-          id="timeline"
-          label="Timeline"
-          error={errors.timeline?.message}
-          className="sm:col-span-2"
-        >
-          <select
-            id="timeline"
-            className="border-input bg-background h-8 w-full rounded-lg border px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
-            disabled={pending}
-            aria-invalid={!!errors.timeline}
-            {...register("timeline")}
-          >
-            <option value="">Select timeline</option>
-            {timelines.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field
-          id="scope"
-          label="Scope notes"
-          error={errors.scope?.message}
+          id="message"
+          label="How can we help?"
+          error={errors.message?.message}
           className="sm:col-span-2"
         >
           <Textarea
-            id="scope"
-            placeholder="Goals, current stack, must-haves, and what ‘done’ looks like."
-            className="min-h-32"
+            id="message"
+            placeholder="A sentence or two is enough — goals, timeline, or questions."
+            className="min-h-28"
             disabled={pending}
-            aria-invalid={!!errors.scope}
-            {...register("scope")}
+            aria-invalid={!!errors.message}
+            {...register("message")}
           />
         </Field>
       </div>
 
       {serverMessage && !success ? (
-        <p className="mt-4 text-sm text-destructive" role="alert">
+        <p className="text-destructive mt-4 text-sm" role="alert">
           {serverMessage}
         </p>
       ) : null}
@@ -269,7 +210,7 @@ export function ProjectIntakeForm({
         <Button
           type="submit"
           size="lg"
-          className="h-11 bg-forest px-6 text-primary-foreground hover:bg-forest/90 dark:bg-gold dark:text-gold-foreground dark:hover:bg-gold/90"
+          className="bg-forest text-primary-foreground hover:bg-forest/90 dark:bg-gold dark:text-gold-foreground dark:hover:bg-gold/90 h-11 px-6"
           disabled={pending}
         >
           {pending
@@ -288,16 +229,20 @@ export function ProjectIntakeForm({
             const values = getValues();
             const message = leadWhatsAppMessage({
               name: values.name || "there",
-              company: values.company || "my company",
-              projectType: values.projectType || "a project",
-              budget: values.budget || "to discuss",
-              timeline: values.timeline || "flexible",
+              company: values.company,
+              phone: values.phone
+                ? formatPhoneDisplay(values.phone)
+                : undefined,
               selectedPlan: values.selectedPlan || selected?.planCode,
-              scope:
-                values.scope ||
+              message:
+                values.message ||
                 "I'd like to discuss a web project with the Lynx team.",
             });
-            window.open(buildWhatsAppUrl(message), "_blank", "noopener,noreferrer");
+            window.open(
+              buildWhatsAppUrl(message),
+              "_blank",
+              "noopener,noreferrer",
+            );
           }}
         >
           Continue on WhatsApp
@@ -327,7 +272,7 @@ function Field({
         {children}
       </div>
       {error ? (
-        <p className="mt-1.5 text-xs text-destructive" role="alert">
+        <p className="text-destructive mt-1.5 text-xs" role="alert">
           {error}
         </p>
       ) : null}

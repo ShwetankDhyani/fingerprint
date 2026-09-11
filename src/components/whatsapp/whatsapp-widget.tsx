@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   buildWhatsAppUrl,
   defaultWhatsAppMessage,
-} from "@/lib/whatsapp";
+} from "@/lib/whatsapp-link";
 import { cn } from "@/lib/utils";
 
 export function WhatsAppWidget() {
@@ -21,8 +21,6 @@ export function WhatsAppWidget() {
           : pathname.startsWith("/contact")
             ? "a project brief"
             : "a custom web development project";
-
-  if (pathname.startsWith("/admin")) return null;
 
   const href = buildWhatsAppUrl(defaultWhatsAppMessage(context));
 

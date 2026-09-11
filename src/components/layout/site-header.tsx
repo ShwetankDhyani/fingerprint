@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { Menu } from "lucide-react";
+import { LynxLogo } from "@/components/brand/lynx-logo";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { buttonVariants } from "@/components/ui/button";
 import {
@@ -23,12 +24,7 @@ export function SiteHeader() {
   return (
     <header className="sticky top-0 z-40 border-b border-border/70 bg-background/85 text-foreground backdrop-blur-md">
       <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-4 px-5 sm:px-8">
-        <Link
-          href="/"
-          className="font-display text-sm font-semibold tracking-[0.18em] text-forest uppercase dark:text-gold"
-        >
-          {siteConfig.shortName}
-        </Link>
+        <LynxLogo size="sm" />
 
         <nav
           className="hidden items-center gap-7 text-sm md:flex"
@@ -76,9 +72,8 @@ export function SiteHeader() {
             </SheetTrigger>
             <SheetContent side="right" className="w-[min(100%,20rem)]">
               <SheetHeader>
-                <SheetTitle className="font-display tracking-[0.14em] uppercase">
-                  {siteConfig.shortName}
-                </SheetTitle>
+                <SheetTitle className="sr-only">{siteConfig.name}</SheetTitle>
+                <LynxLogo href={null} size="md" className="mt-1" />
               </SheetHeader>
               <nav className="mt-6 grid gap-1" aria-label="Mobile">
                 {siteConfig.nav.map((item) => (

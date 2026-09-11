@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { LynxLogo } from "@/components/brand/lynx-logo";
 import { siteConfig } from "@/lib/site";
 
 export function SiteFooter() {
@@ -6,9 +7,7 @@ export function SiteFooter() {
     <footer className="border-t border-border/80 bg-mist dark:bg-forest/40">
       <div className="mx-auto grid max-w-6xl gap-10 px-5 py-14 sm:px-8 md:grid-cols-[1.4fr_1fr_1fr]">
         <div>
-          <p className="font-display text-sm font-semibold tracking-[0.16em] text-forest uppercase dark:text-gold">
-            {siteConfig.name}
-          </p>
+          <LynxLogo size="md" />
           <p className="mt-3 max-w-sm text-sm leading-relaxed text-muted-foreground">
             Web engineering since {siteConfig.founded}. India and global. You
             work with the people who design and ship — with support any day of
@@ -63,11 +62,22 @@ export function SiteFooter() {
         </div>
       </div>
       <div className="border-t border-border/60">
-        <div className="mx-auto flex max-w-6xl flex-col gap-2 px-5 py-6 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between sm:px-8">
+        <div className="mx-auto flex max-w-6xl flex-col gap-3 px-5 py-6 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between sm:px-8">
           <p>
             © {new Date().getFullYear()} {siteConfig.name}. All rights reserved.
           </p>
-          <p>Est. {siteConfig.founded} · lynxwebsolutions.com</p>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+            <Link href="/privacy" className="hover:text-foreground">
+              Privacy
+            </Link>
+            <Link href="/terms" className="hover:text-foreground">
+              Terms
+            </Link>
+            <span>
+              Est. {siteConfig.founded} ·{" "}
+              {siteConfig.url.replace(/^https?:\/\//, "")}
+            </span>
+          </div>
         </div>
       </div>
     </footer>

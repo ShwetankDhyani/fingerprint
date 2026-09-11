@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
 import { Check, Sparkles } from "lucide-react";
 import { Reveal } from "@/components/motion/reveal";
+import { CashfreeReturnHandler } from "@/components/payments/cashfree-return-handler";
 import { PlanCheckoutPanel } from "@/components/payments/plan-checkout";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
@@ -20,6 +21,10 @@ export function PlansPricingGrid() {
 
   return (
     <div>
+      <Suspense fallback={null}>
+        <CashfreeReturnHandler />
+      </Suspense>
+
       <ul className="grid gap-6 lg:grid-cols-3 lg:items-stretch">
         {sellablePlans.map((plan, index) => {
           const paying = checkoutSlug === plan.slug;
@@ -53,8 +58,15 @@ export function PlansPricingGrid() {
                 <p className="mt-6 font-display text-4xl tracking-tight text-forest dark:text-gold">
                   {plan.priceLabel}
                 </p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Due today{" "}
+                  <span className="font-medium text-foreground">
+                    {plan.advanceLabel}
+                  </span>{" "}
+                  ({plan.advancePercent}% advance)
+                </p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Delivery {plan.delivery}
+                  {plan.paymentTerms} · Delivery {plan.delivery}
                 </p>
 
                 <ul className="mt-6 flex-1 space-y-3 text-sm text-muted-foreground">
@@ -67,8 +79,9 @@ export function PlansPricingGrid() {
                 </ul>
 
                 <div className="mt-8 grid gap-2">
-                  <Link
-                    href={`/contact?plan=${plan.slug}`}
+                  <button
+                    type="button"
+                    onClick={() => setCheckoutSlug(plan.slug)}
                     className={cn(
                       buttonVariants({ size: "lg" }),
                       "h-11",
@@ -77,23 +90,13 @@ export function PlansPricingGrid() {
                         : "bg-forest text-primary-foreground hover:bg-forest/90 dark:bg-gold dark:text-gold-foreground dark:hover:bg-gold/90",
                     )}
                   >
-                    Get started
-                  </Link>
-                  <button
-                    type="button"
-                    onClick={() => setCheckoutSlug(plan.slug)}
-                    className={cn(
-                      buttonVariants({ variant: "outline", size: "lg" }),
-                      "h-11",
-                    )}
-                  >
-                    {paying ? "Checkout open below" : "Pay now"}
+                    {paying ? "Checkout open below" : "Book plan"}
                   </button>
                   <Link
-                    href={`/contact?plan=${plan.slug}&mode=discuss`}
+                    href={`/contact?plan=${plan.slug}`}
                     className="pt-1 text-center text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
                   >
-                    Or discuss first
+                    Or send a short enquiry
                   </Link>
                 </div>
               </article>

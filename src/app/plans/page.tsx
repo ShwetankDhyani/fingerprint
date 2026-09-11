@@ -11,12 +11,12 @@ import { cn } from "@/lib/utils";
 export const metadata: Metadata = {
   title: "Plans & Pricing",
   description:
-    "Website plans from Lynx Web Solutions — Starter ₹14,999, Growth ₹34,999, Premium ₹69,999 — plus services and add-ons.",
+    "Website plans from Lynx Web Solutions — book with a professional advance (50% or 25%), balance before go-live. Starter from ₹14,999, Growth ₹34,999, Premium ₹69,999.",
   alternates: { canonical: "/plans" },
   openGraph: {
     title: `Plans & Pricing | ${siteConfig.name}`,
     description:
-      "Book Local Business Starter, Lead Generation Pro, or Premium Brand / Ecommerce website plans.",
+      "Book Starter, Growth, or Premium with a project advance — remaining balance before go-live.",
     url: `${siteConfig.url}/plans`,
   },
 };
@@ -29,8 +29,8 @@ export default function PlansPage() {
         <div className="relative mx-auto max-w-6xl px-5 py-20 sm:px-8 sm:py-28">
           <SectionHeading
             eyebrow="Plans"
-            title="Clear packages you can book today."
-            description="Pick a scope, then get started with a brief — or pay now through India (Razorpay) or international (Stripe) checkout."
+            title="Clear packages. Professional advance to book."
+            description="Pay a booking advance online (not the full fee), kick off within 48 hours, and settle the balance before go-live — Cashfree for India and international cards."
           />
         </div>
       </section>
@@ -40,17 +40,25 @@ export default function PlansPage() {
           <SectionHeading
             eyebrow="Website plans"
             title="Most in-demand offers."
-            description="Simple scopes for local businesses, lead-gen sites, and premium brand or ecommerce builds."
+            description="Simple scopes for local businesses, lead-gen sites, and premium brand or ecommerce builds. Industry-standard advance payment — you never pay 100% before work starts."
           />
 
           <div className="mt-14">
             <PlansPricingGrid />
           </div>
 
-          <p className="mt-8 max-w-3xl text-sm text-muted-foreground">
-            Need a custom web app, marketplace, or SaaS dashboard? We scope and
-            quote separately — use contact and pick “Custom SaaS / web app.”
-          </p>
+          <div className="mt-10 max-w-3xl space-y-3 text-sm text-muted-foreground">
+            <p>
+              <span className="font-medium text-foreground">How payment works:</span>{" "}
+              Starter books at 50% advance; Growth and Premium at 25%. Kickoff
+              starts after the advance clears. Remaining balance is invoiced
+              before launch (Premium may split into milestones).
+            </p>
+            <p>
+              Need a custom web app, marketplace, or SaaS dashboard? We scope and
+              quote separately — use contact and pick “Custom SaaS / web app.”
+            </p>
+          </div>
         </div>
       </section>
 

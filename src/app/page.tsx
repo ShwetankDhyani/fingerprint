@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { LynxMark } from "@/components/brand/lynx-mark";
 import { ArrowRight, Check } from "lucide-react";
 import { TerminalPreview } from "@/components/home/terminal-preview";
 import { Reveal } from "@/components/motion/reveal";
@@ -29,12 +30,21 @@ export default function HomePage() {
         />
         <div className="absolute inset-0 bg-gradient-to-br from-[#0a1f18]/93 via-[#0f3d2e]/78 to-[#0c1612]/60" />
         <div className="grain absolute inset-0 opacity-[0.18] mix-blend-overlay" />
+        <LynxMark className="pointer-events-none absolute -right-6 top-1/2 hidden h-[min(70vh,28rem)] w-auto -translate-y-1/2 text-white/[0.06] sm:block lg:right-[4%] lg:text-white/[0.07]" />
 
         <div className="relative z-10 mx-auto grid min-h-[calc(100svh-3.5rem)] max-w-6xl items-end gap-10 px-5 py-16 sm:px-8 lg:grid-cols-[1.15fr_0.85fr] lg:items-center lg:py-20">
           <div>
-            <p className="animate-lynx-rise font-display text-4xl leading-none font-semibold tracking-tight sm:text-6xl md:text-7xl">
-              Lynx Web Solutions
-            </p>
+            <div className="animate-lynx-rise flex items-center gap-4 sm:gap-5">
+              <LynxMark className="h-14 w-auto text-gold sm:h-20 md:h-[5.5rem]" />
+              <div>
+                <p className="font-display text-4xl leading-[0.85] font-semibold tracking-tight sm:text-6xl md:text-7xl">
+                  Lynx
+                </p>
+                <p className="mt-2 font-display text-sm font-medium tracking-[0.28em] text-gold/90 uppercase sm:text-base">
+                  Web Solutions
+                </p>
+              </div>
+            </div>
             <div className="animate-lynx-line mt-5 h-px w-24 bg-gold sm:w-32" />
             <h1 className="animate-lynx-rise delay-1 mt-6 max-w-xl font-display text-2xl leading-tight tracking-tight text-white/95 sm:text-3xl md:text-4xl">
               {siteConfig.tagline}
@@ -168,7 +178,7 @@ export default function HomePage() {
             <SectionHeading
               eyebrow="Selected work"
               title="Live sites. Real businesses."
-              description="Client websites across ecommerce, travel, platforms, and more — designed and shipped by Lynx."
+              description="Product platforms and brand sites first — ChessReview, GetSetGoa, monk.run, and more — designed and shipped by Lynx."
             />
             <Link
               href="/work"
@@ -236,7 +246,7 @@ export default function HomePage() {
             <SectionHeading
               eyebrow="Plans"
               title="Packaged offers ready to book."
-              description="Starter, Growth, and Premium website plans — clear scope, clear price, clear delivery windows."
+              description="Starter, Growth, and Premium — clear scope, project total, and a professional advance to start."
             />
             <Link
               href="/plans"
@@ -269,11 +279,14 @@ export default function HomePage() {
                   <p className="mt-3 font-display text-3xl text-forest dark:text-gold">
                     {plan.priceLabel}
                   </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Advance {plan.advanceLabel} · {plan.paymentTerms}
+                  </p>
                   <p className="mt-2 flex-1 text-sm text-muted-foreground">
                     {plan.blurb}
                   </p>
                   <Link
-                    href={`/contact?plan=${plan.slug}`}
+                    href={`/plans`}
                     className="mt-5 inline-flex items-center gap-1 text-sm font-medium text-forest dark:text-gold"
                   >
                     Book {plan.label}

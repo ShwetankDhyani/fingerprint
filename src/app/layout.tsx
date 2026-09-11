@@ -1,10 +1,8 @@
 import type { Metadata } from "next";
+import type { ReactNode } from "react";
 import { Figtree, JetBrains_Mono, Syne } from "next/font/google";
-import { SiteFooter } from "@/components/layout/site-footer";
-import { SiteHeader } from "@/components/layout/site-header";
+import { RootChrome } from "@/components/layout/root-chrome";
 import { ThemeProvider } from "@/components/layout/theme-provider";
-import { OrganizationJsonLd } from "@/components/seo/json-ld";
-import { WhatsAppWidget } from "@/components/whatsapp/whatsapp-widget";
 import { siteConfig } from "@/lib/site";
 import "./globals.css";
 
@@ -38,7 +36,7 @@ export const metadata: Metadata = {
     "SaaS engineering",
     "ecommerce development",
     "technical SEO",
-    "lynxwebsolutions",
+    "lynxweb.in",
   ],
   authors: [{ name: siteConfig.name, url: siteConfig.url }],
   creator: siteConfig.name,
@@ -64,7 +62,7 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html
       lang="en"
@@ -73,11 +71,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="flex min-h-full flex-col font-sans">
         <ThemeProvider>
-          <OrganizationJsonLd />
-          <SiteHeader />
-          <main className="flex-1">{children}</main>
-          <SiteFooter />
-          <WhatsAppWidget />
+          <RootChrome>{children}</RootChrome>
         </ThemeProvider>
       </body>
     </html>

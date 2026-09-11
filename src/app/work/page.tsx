@@ -28,7 +28,7 @@ export default function WorkPage() {
           <SectionHeading
             eyebrow="Work"
             title="Live sites. Real businesses."
-            description={`A curated selection of ${portfolioProjects.length} client websites from the Lynx portfolio. Filter by lane and open any project live.`}
+            description={`A curated selection of ${portfolioProjects.length} live sites — product platforms and brand work first, then the broader Lynx portfolio. Filter by lane and open any project.`}
           />
         </div>
       </section>
