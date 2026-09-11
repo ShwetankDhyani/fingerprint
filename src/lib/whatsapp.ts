@@ -1,6 +1,6 @@
 import "server-only";
 
-import { env } from "@/lib/env";
+import { env, siteUrl } from "@/lib/env";
 import { formatInr } from "@/lib/portal/utils";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -211,6 +211,13 @@ export async function sendWhatsAppTemplate(input: {
   }
 }
 
+async function gatedEvent(
+  event: "lead_received" | "payment_received" | "quotation_sent" | "invoice_sent",
+) {
+  const { isWhatsAppEventEnabled } = await import("@/lib/whatsapp-events");
+  return isWhatsAppEventEnabled(event);
+}
+
 export async function sendPaymentWhatsApp(input: {
   toPhone?: string | null;
   clientName?: string | null;
@@ -221,6 +228,13 @@ export async function sendPaymentWhatsApp(input: {
   entityType?: string | null;
   entityId?: string | null;
 }) {
+  if (!(await gatedEvent("payment_received"))) {
+    return {
+      sent: false as const,
+      skipped: true,
+      error: "Event disabled in Admin → Settings",
+    };
+  }
   if (!input.toPhone) {
     return { sent: false as const, skipped: true, error: "No phone on file" };
   }
@@ -250,6 +264,13 @@ export async function sendQuoteWhatsApp(input: {
   organizationId?: string | null;
   quoteId: string;
 }) {
+  if (!(await gatedEvent("quotation_sent"))) {
+    return {
+      sent: false as const,
+      skipped: true,
+      error: "Event disabled in Admin → Settings",
+    };
+  }
   if (!input.toPhone) {
     return { sent: false as const, skipped: true, error: "No phone on file" };
   }
@@ -265,6 +286,87 @@ export async function sendQuoteWhatsApp(input: {
     organizationId: input.organizationId,
     entityType: "quote",
     entityId: input.quoteId,
+  });
+}
+
+export async function sendInvoiceWhatsApp(input: {
+  toPhone?: string | null;
+  clientName?: string | null;
+  invoiceNumber: string;
+  amountMinor: number;
+  dueAt?: string | null;
+  url?: string | null;
+  organizationId?: string | null;
+  invoiceId: string;
+}) {
+  if (!(await gatedEvent("invoice_sent"))) {
+    return {
+      sent: false as const,
+      skipped: true,
+      error: "Event disabled in Admin → Settings",
+    };
+  }
+  if (!input.toPhone) {
+    return { sent: false as const, skipped: true, error: "No phone on file" };
+  }
+  const settings = whatsappSettings();
+  const name = input.clientName?.trim().split(/\s+/)[0] || "there";
+  const amount = formatInr(input.amountMinor);
+  const due = input.dueAt ? ` Due ${input.dueAt}.` : "";
+  const link = input.url ? ` ${input.url}` : "";
+  const preview = `Hi ${name}, your Lynx invoice ${input.invoiceNumber} for ${amount} is ready.${due}${link}`;
+  const template =
+    process.env.WHATSAPP_INVOICE_TEMPLATE?.trim() || "invoice_ready";
+  return sendWhatsAppTemplate({
+    toPhone: input.toPhone,
+    template,
+    bodyPreview: preview,
+    bodyParameters: [
+      name,
+      input.invoiceNumber,
+      amount,
+      input.dueAt || "on receipt",
+      input.url || siteUrl() || "lynxweb.in",
+    ],
+    organizationId: input.organizationId,
+    entityType: "invoice",
+    entityId: input.invoiceId,
+  });
+}
+
+export async function sendLeadReceivedWhatsApp(input: {
+  toPhone?: string | null;
+  clientName?: string | null;
+  company?: string | null;
+  selectedPlan?: string | null;
+  leadId?: string | null;
+}) {
+  if (!(await gatedEvent("lead_received"))) {
+    return {
+      sent: false as const,
+      skipped: true,
+      error: "Event disabled in Admin → Settings",
+    };
+  }
+  if (!input.toPhone) {
+    return { sent: false as const, skipped: true, error: "No phone on file" };
+  }
+  const name = input.clientName?.trim().split(/\s+/)[0] || "there";
+  const company = input.company?.trim() || "your project";
+  const plan = input.selectedPlan?.trim()
+    ? ` Plan interest: ${input.selectedPlan.trim()}.`
+    : "";
+  const preview = `Hi ${name}, thanks for reaching out to Lynx about ${company}.${plan} A Lynx engineer will reply within one business day.`;
+  const template =
+    process.env.WHATSAPP_LEAD_TEMPLATE?.trim() || "lead_received";
+  return sendWhatsAppTemplate({
+    toPhone: input.toPhone,
+    template,
+    bodyPreview: preview,
+    bodyParameters: [name, company, input.selectedPlan?.trim() || "general enquiry"],
+    organizationId: null,
+    entityType: "lead",
+    entityId: input.leadId,
   });
 }
 

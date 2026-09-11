@@ -65,7 +65,12 @@ import {
   slugify,
 } from "@/lib/portal/utils";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { sendQuoteWhatsApp } from "@/lib/whatsapp";
+import { sendInvoiceWhatsApp, sendQuoteWhatsApp } from "@/lib/whatsapp";
+import {
+  WHATSAPP_EVENT_KEYS,
+  type WhatsAppEventKey,
+  updateWhatsAppEventSettings,
+} from "@/lib/whatsapp-events";
 
 function db() {
   const client = getSupabaseAdmin();
@@ -1307,6 +1312,16 @@ export async function createInvoiceFromQuoteAction(formData: FormData) {
     });
   }
 
+  await sendInvoiceWhatsApp({
+    toPhone: quote.recipient_phone as string | null,
+    clientName: quote.recipient_name as string | null,
+    invoiceNumber,
+    amountMinor: amount,
+    dueAt: due.toISOString().slice(0, 10),
+    organizationId: organizationId,
+    invoiceId: invoice.id as string,
+  }).catch((error) => console.error("[invoices] whatsapp failed", error));
+
   await logActivity(admin, {
     actorId: profile.id,
     organizationId: quote.organization_id,
@@ -1621,6 +1636,23 @@ export async function updateTicketAction(formData: FormData) {
 
   revalidatePath(`/admin/tickets/${threadId}`);
   revalidatePath("/admin/tickets");
+}
+
+
+export async function saveWhatsAppEventSettingsAction(
+  _prev: { ok: boolean; message: string },
+  formData: FormData,
+): Promise<{ ok: boolean; message: string }> {
+  await requireStaff();
+  const patch = Object.fromEntries(
+    WHATSAPP_EVENT_KEYS.map((key) => [key, formData.get(key) === "on"]),
+  ) as Record<WhatsAppEventKey, boolean>;
+  const saved = await updateWhatsAppEventSettings(patch);
+  revalidatePath("/admin/settings");
+  return {
+    ok: true,
+    message: `WhatsApp event toggles saved (${saved.source}).`,
+  };
 }
 
 export async function sendTestEmailAction(formData: FormData) {

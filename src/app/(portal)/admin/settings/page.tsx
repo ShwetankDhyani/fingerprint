@@ -20,10 +20,12 @@ import {
   isSupabaseConfigured,
   siteUrl,
 } from "@/lib/env";
+import { WhatsAppEventTogglesForm } from "@/components/portal/whatsapp-event-toggles";
 import {
   fetchWhatsAppLog,
   isWhatsAppConfigured,
 } from "@/lib/whatsapp";
+import { getWhatsAppEventSettings } from "@/lib/whatsapp-events";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { relativeTime } from "@/lib/portal/utils";
 import { cn } from "@/lib/utils";
@@ -56,6 +58,8 @@ export default async function AdminSettingsPage() {
   const log = await fetchEmailLog(25);
   const whatsappConfigured = isWhatsAppConfigured();
   const whatsappLog = await fetchWhatsAppLog(15);
+  const { settings: whatsappEventSettings, source: whatsappEventSource } =
+    await getWhatsAppEventSettings();
   const isSuperAdmin = isSuperAdminRole(profile.role);
   const isAdmin = isAdminRole(profile.role);
   const admin = getSupabaseAdmin();
@@ -289,6 +293,11 @@ export default async function AdminSettingsPage() {
           </ul>
         </section>
       ) : null}
+
+      <WhatsAppEventTogglesForm
+        settings={whatsappEventSettings}
+        source={whatsappEventSource}
+      />
 
       {whatsappLog.length > 0 ? (
         <section className="space-y-3">

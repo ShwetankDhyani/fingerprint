@@ -12,6 +12,7 @@ import {
 } from "@/lib/schemas/contact";
 import { sanitizeEmail, sanitizePhone, sanitizeText } from "@/lib/sanitize";
 import { getSupabaseAdmin, insertLead } from "@/lib/supabase/admin";
+import { sendLeadReceivedWhatsApp } from "@/lib/whatsapp";
 
 export type ContactActionState = {
   ok: boolean;
@@ -148,6 +149,14 @@ export async function submitProjectInquiry(
     if (mail.error) {
       console.error("[contact] email error", mail.error);
     }
+
+    await sendLeadReceivedWhatsApp({
+      toPhone: enquiry.phone,
+      clientName: enquiry.name,
+      company: enquiry.company || null,
+      selectedPlan: enquiry.selectedPlan || null,
+      leadId: stored.id,
+    }).catch((error) => console.error("[contact] whatsapp failed", error));
 
     return {
       ok: true,
