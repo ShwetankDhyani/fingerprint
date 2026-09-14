@@ -207,6 +207,8 @@ clone_libfprint() {
 apply_patch() {
   git -C "$BUILD_DIR" apply --check "${ROOT}/patches/elanspi-x403f.patch"
   git -C "$BUILD_DIR" apply "${ROOT}/patches/elanspi-x403f.patch"
+  git -C "$BUILD_DIR" apply --check "${ROOT}/patches/sigfm-opencv5.patch"
+  git -C "$BUILD_DIR" apply "${ROOT}/patches/sigfm-opencv5.patch"
 }
 
 ensure_doctest_pkgconfig() {
@@ -235,17 +237,21 @@ EOF
 }
 
 build_libfprint() {
-  if ! pkg-config --exists opencv4 && ! pkg-config --exists opencv; then
-    red "OpenCV pkg-config file not found (need opencv or libopencv-dev)."
+  if ! pkg-config --exists opencv5 && ! pkg-config --exists opencv4 && ! pkg-config --exists opencv; then
+    red "OpenCV pkg-config file not found (looked for opencv5, opencv4, opencv)."
+    echo "Installed opencv-related pkg-config modules:"
+    pkg-config --list-all 2>/dev/null | grep -i opencv || echo "  (none)"
     exit 1
   fi
   ensure_doctest_pkgconfig
   rm -rf "${BUILD_DIR}/build"
   # Keep libdir as "lib" so LD_LIBRARY_PATH is a single directory.
   # Force GCC: some images have clang as c++ without libstdc++.
+  # OpenCV 5 requires C++17.
   CC="${CC:-gcc}" CXX="${CXX:-g++}" meson setup "${BUILD_DIR}/build" "$BUILD_DIR" \
     --prefix="$PREFIX" \
     --libdir=lib \
+    -Dcpp_std=c++17 \
     -Ddrivers=elanspi \
     -Dudev_rules=disabled \
     -Dudev_hwdb=disabled \
@@ -274,6 +280,7 @@ install_system_files() {
   install -m 0755 "${ROOT}/bin/x403f-fp" "$PREFIX/bin/x403f-fp"
   install -m 0644 "${ROOT}/scripts/common.sh" "${PREFIX}/share/x403f-fp/scripts/common.sh"
   install -m 0644 "${ROOT}/patches/elanspi-x403f.patch" "${PREFIX}/share/x403f-fp/patches/"
+  install -m 0644 "${ROOT}/patches/sigfm-opencv5.patch" "${PREFIX}/share/x403f-fp/patches/"
   cp -a "${ROOT}/system/." "${PREFIX}/share/x403f-fp/system/"
   ln -sfn "$PREFIX/bin/x403f-fp" /usr/local/bin/x403f-fp
   ln -sfn "$PREFIX/bin/x403f-fp" /usr/bin/x403f-fp

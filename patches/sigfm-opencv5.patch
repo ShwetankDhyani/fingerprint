@@ -1,0 +1,13 @@
+--- a/libfprint/sigfm/meson.build
++++ b/libfprint/sigfm/meson.build
+@@ -1,8 +1,8 @@
+ 
+ sigfm_sources = ['sigfm.cpp']
+ 
+-opencv = dependency('opencv4', required: true, version: '>=4.5.0')
+-doctest = dependency('doctest', required: true, version: ['>=2.0.0', '<3.0.0'])
++opencv = dependency('opencv5', 'opencv4', required: true)
++doctest = dependency('doctest', required: true)
+ 
+ libsigfm = static_library('sigfm',
+         sigfm_sources,
