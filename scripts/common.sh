@@ -107,13 +107,24 @@ load_spi_modules() {
 apt_install_deps() {
   export DEBIAN_FRONTEND=noninteractive
   apt-get update -qq
+  local extra=()
+  if apt-cache show doctest-dev >/dev/null 2>&1; then
+    extra+=(doctest-dev)
+  else
+    extra+=(libdoctest-dev)
+  fi
+  if apt-cache show libgusb-dev >/dev/null 2>&1; then
+    extra+=(libgusb-dev)
+  fi
   apt-get install -y --no-install-recommends \
     git meson ninja-build build-essential pkg-config ca-certificates \
+    g++ \
     libglib2.0-dev libgusb-dev libgudev-1.0-dev libpixman-1-dev \
     libnss3-dev libpolkit-gobject-1-dev libsystemd-dev \
-    libopencv-dev libdoctest-dev \
+    libopencv-dev \
     fprintd libpam-fprintd \
-    usbutils pciutils udev systemd kmod
+    usbutils pciutils udev systemd kmod \
+    "${extra[@]}"
 }
 
 clone_libfprint() {
@@ -131,14 +142,41 @@ apply_patch() {
   git -C "$BUILD_DIR" apply "${ROOT}/patches/elanspi-x403f.patch"
 }
 
+ensure_doctest_pkgconfig() {
+  if pkg-config --exists doctest; then
+    return 0
+  fi
+  local inc=""
+  if [[ -f /usr/include/doctest/doctest.h ]]; then
+    inc=/usr/include
+  elif [[ -f /usr/include/doctest.h ]]; then
+    inc=/usr/include
+  else
+    red "doctest headers missing (install doctest-dev or libdoctest-dev)."
+    exit 1
+  fi
+  mkdir -p "${BUILD_DIR}/.pc"
+  cat > "${BUILD_DIR}/.pc/doctest.pc" <<EOF
+prefix=/usr
+includedir=${inc}
+Name: doctest
+Description: C++ testing framework
+Version: 2.4.11
+Cflags: -I\${includedir}
+EOF
+  export PKG_CONFIG_PATH="${BUILD_DIR}/.pc${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
+}
+
 build_libfprint() {
   if ! pkg-config --exists opencv4; then
     red "OpenCV 4 pkg-config file not found (need libopencv-dev)."
     exit 1
   fi
+  ensure_doctest_pkgconfig
   rm -rf "${BUILD_DIR}/build"
   # Keep libdir as "lib" so LD_LIBRARY_PATH is a single directory.
-  meson setup "${BUILD_DIR}/build" "$BUILD_DIR" \
+  # Force GCC: some images have clang as c++ without libstdc++.
+  CC="${CC:-gcc}" CXX="${CXX:-g++}" meson setup "${BUILD_DIR}/build" "$BUILD_DIR" \
     --prefix="$PREFIX" \
     --libdir=lib \
     -Ddrivers=elanspi \
