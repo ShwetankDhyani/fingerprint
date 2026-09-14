@@ -1,3 +1,4 @@
-# fprintd runs as root, but example tools and diagnostics need access too.
-KERNEL=="spidev*", MODE="0660", GROUP="plugdev"
-KERNEL=="hidraw*", ATTRS{idVendor}=="04f3", MODE="0660", GROUP="plugdev"
+# fprintd runs as root. uaccess covers seat-local users; 0666 is a fallback
+# because Arch/CachyOS often have no plugdev group.
+KERNEL=="spidev*", MODE="0666", TAG+="uaccess"
+KERNEL=="hidraw*", ATTRS{idVendor}=="04f3", MODE="0666", TAG+="uaccess"

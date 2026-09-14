@@ -1,11 +1,12 @@
-# ASUS VivoBook X403F fingerprint on Ubuntu
+# ASUS VivoBook X403F fingerprint on CachyOS (and Ubuntu)
 
 The fingerprint reader on the **ASUS VivoBook 14 X403F / X403FA / X403FAC**
-works on Windows and is ignored or broken on Ubuntu. This repo makes it work.
+works on Windows and is ignored or broken on Linux. This repo makes it work
+on **CachyOS** (Arch) and Ubuntu.
 
 It is **not a USB device**. `lsusb` will not show it. The chip is an Elan SPI
 sensor (`ACPI ELAN7001` / `ELAN7002`) sitting in the corner of the touchpad,
-paired with HID `04F3:3128` (`ELAN1301`). Ubuntu’s packaged `libfprint` either:
+paired with HID `04F3:3128` (`ELAN1301`). Distro `libfprint` either:
 
 - never binds `spidev` to the ACPI node,
 - does not list product ID `0x3128`,
@@ -19,29 +20,25 @@ This installer builds a patched `libfprint` (elanspi + SIGFM matcher), installs
 it under `/opt/asus-x403f-fp` so the distro library stays untouched, and points
 **only** `fprintd` at it.
 
-## On the laptop
+## On the laptop (CachyOS)
 
 ```bash
-sudo apt update
-sudo apt install -y git
-git clone <this-repo>
-cd <this-repo>
+sudo pacman -Sy --needed --noconfirm git
+git clone https://github.com/ShwetankDhyani/fingerprint.git
+cd fingerprint
 sudo ./install.sh
 x403f-fp enroll
 x403f-fp verify
 ```
 
-`install.sh` needs network (to fetch libfprint), a compiler, and about 5 minutes.
+Already cloned? Run `git pull` in that folder, then `sudo ./install.sh` again.
 
-Then enable fingerprint login:
+`install.sh` needs network (to fetch libfprint), a compiler, and a few minutes.
 
-```bash
-sudo pam-auth-update --enable fprintd
-```
-
-Keep “Unix authentication” ticked so a password still works.
-
+KDE Plasma: **System Settings → Users → Fingerprint**.
 GNOME: **Settings → Users → Fingerprint Login**.
+
+Password login stays available.
 
 ## Swipe, don’t press
 
@@ -50,9 +47,6 @@ of the touchpad (usually top-right). Swipe slowly across it. A static press
 times out (`enroll-unknown-error` / `timed out waiting for image`).
 
 ## If verify never matches
-
-Rotation of the sensor vs the touchpad is per-PID. For `04F3:3128` the default
-is no rotation. Try the others and re-enroll:
 
 ```bash
 sudo x403f-fp rotate 2    # 180°
@@ -103,7 +97,7 @@ firmware is in the sensor OTP. We do not install the Windows DLLs.
 ## Dual-boot
 
 A cold power-off after Windows is more reliable than a warm reboot. Windows
-Hello prints are not reused; enroll again on Ubuntu.
+Hello prints are not reused; enroll again on Linux.
 
 ## Uninstall
 

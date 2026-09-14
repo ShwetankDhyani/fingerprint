@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ASUS VivoBook X403F / X403FA fingerprint helper for Ubuntu.
+# ASUS VivoBook X403F / X403FA fingerprint helper for CachyOS (Arch) and Ubuntu.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -16,7 +16,7 @@ fi
 
 usage() {
   cat <<'EOF'
-x403f-fp — make the ASUS VivoBook X403F Elan fingerprint sensor work on Ubuntu
+x403f-fp — make the ASUS VivoBook X403F Elan fingerprint sensor work on CachyOS / Ubuntu
 
 Usage:
   sudo x403f-fp install     Build patched libfprint, bind SPI, enable fprintd
@@ -30,14 +30,15 @@ Usage:
        x403f-fp help
 
 The X403F reader is ACPI SPI (ELAN7001 + touchpad HID 04F3:3128). It never
-shows up in lsusb. Ubuntu's stock libfprint either misses the PID, times out
-during OTP/vcom init, or enrolls prints that never verify. This tool patches
-the elanspi driver and swaps in the SIGFM matcher.
+shows up in lsusb. Distro libfprint either misses the PID, times out during
+OTP/vcom init, or enrolls prints that never verify. This tool patches the
+elanspi driver and swaps in the SIGFM matcher.
 EOF
 }
 
 cmd_probe() {
   bold "Machine"
+  echo "  $(os_pretty)"
   echo "  $(cat /sys/class/dmi/id/product_name 2>/dev/null || echo unknown)  $(cat /sys/class/dmi/id/product_version 2>/dev/null || true)"
   echo "  kernel $(uname -r)"
   echo
@@ -91,7 +92,7 @@ cmd_probe() {
     printf '%s\n' "$usb" | sed 's/^/  /'
     if detect_goodix_usb >/dev/null; then
       yellow "  Goodix USB reader detected. This installer still helps for SPI,"
-      echo "  but you may also want: sudo apt install fprintd libpam-fprintd"
+      echo "  but you may also want the distro fprintd package installed"
     fi
   else
     echo "  none (expected for X403F)"
@@ -133,7 +134,7 @@ cmd_status() {
 cmd_install() {
   need_root
   bold "1/6 Installing build dependencies and fprintd"
-  apt_install_deps
+  install_deps
 
   bold "2/6 Loading SPI / HID kernel modules and binding spidev"
   load_spi_modules
@@ -183,6 +184,7 @@ If verify always says verify-no-match, try:
   x403f-fp enroll
 
 GNOME: Settings → Users → Fingerprint Login
+KDE / CachyOS Plasma: System Settings → Users → Fingerprint
 EOF
 }
 
@@ -199,6 +201,13 @@ cmd_uninstall() {
   udevadm control --reload-rules || true
   systemctl daemon-reload
   systemctl restart fprintd.service 2>/dev/null || true
+  local bak
+  for bak in /etc/pam.d/system-local-login.x403f.bak /etc/pam.d/sddm.x403f.bak \
+             /etc/pam.d/gdm-password.x403f.bak /etc/pam.d/kde.x403f.bak; do
+    if [[ -f "$bak" ]]; then
+      mv "$bak" "${bak%.x403f.bak}"
+    fi
+  done
   green "Removed patched libfprint and X403F udev/modprobe files."
   echo "Distro libfprint (if installed) is untouched. fprintd may still be present."
 }

@@ -104,6 +104,36 @@ load_spi_modules() {
   done
 }
 
+os_pretty() {
+  if [[ -r /etc/os-release ]]; then
+    # shellcheck disable=SC1091
+    . /etc/os-release
+    printf '%s\n' "${PRETTY_NAME:-${ID:-unknown}}"
+  else
+    echo unknown
+  fi
+}
+
+install_deps() {
+  if have pacman; then
+    pacman_install_deps
+  elif have apt-get; then
+    apt_install_deps
+  else
+    red "Need pacman (CachyOS / Arch) or apt (Ubuntu / Debian)."
+    exit 1
+  fi
+}
+
+pacman_install_deps() {
+  pacman -Sy --needed --noconfirm \
+    git meson ninja gcc pkgconf base-devel \
+    glib2 libgusb libgudev pixman nss polkit \
+    opencv doctest \
+    fprintd \
+    usbutils pciutils kmod
+}
+
 apt_install_deps() {
   export DEBIAN_FRONTEND=noninteractive
   apt-get update -qq
@@ -165,8 +195,8 @@ EOF
 }
 
 build_libfprint() {
-  if ! pkg-config --exists opencv4; then
-    red "OpenCV 4 pkg-config file not found (need libopencv-dev)."
+  if ! pkg-config --exists opencv4 && ! pkg-config --exists opencv; then
+    red "OpenCV pkg-config file not found (need opencv or libopencv-dev)."
     exit 1
   fi
   ensure_doctest_pkgconfig
@@ -223,10 +253,38 @@ reload_services() {
     || true
 }
 
+ensure_pam_fprintd_line() {
+  local file="$1"
+  [[ -f "$file" ]] || return 0
+  if grep -q 'pam_fprintd\.so' "$file"; then
+    return 0
+  fi
+  cp -a "$file" "${file}.x403f.bak"
+  local tmp
+  tmp="$(mktemp)"
+  awk '
+    BEGIN { done = 0 }
+    /^auth[ \t]/ && !done {
+      print "auth      sufficient      pam_fprintd.so"
+      done = 1
+    }
+    { print }
+  ' "$file" > "$tmp"
+  mv "$tmp" "$file"
+  green "Enabled pam_fprintd in ${file} (backup: ${file}.x403f.bak)"
+}
+
 enable_pam() {
   if have pam-auth-update; then
     pam-auth-update --enable fprintd --package || true
+    return
   fi
+  # Arch / CachyOS: do not touch system-auth (too broad). Local login +
+  # display manager only, password still works because pam_unix stays.
+  ensure_pam_fprintd_line /etc/pam.d/system-local-login
+  ensure_pam_fprintd_line /etc/pam.d/sddm
+  ensure_pam_fprintd_line /etc/pam.d/gdm-password
+  ensure_pam_fprintd_line /etc/pam.d/kde
 }
 
 set_rotation() {
