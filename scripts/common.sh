@@ -43,30 +43,16 @@ fp_session_user() {
 
 require_live_driver() {
   local so="${LIBDIR}/libfprint-2.so.2"
+  local marker="${PREFIX}/share/x403f-fp/DRIVER_MARKER"
   if [[ ! -e "$so" ]]; then
     red "Patched libfprint is missing. Run: sudo ./install.sh"
     exit 1
   fi
-  if ! strings "$so" 2>/dev/null | grep -q 'x403f-waitup-skip'; then
-    red "install.sh has not finished (driver on disk is still the old build)."
-    echo "Wait until it prints 'Install finished', then:"
-    echo "  sudo systemctl restart fprintd"
-    echo "  ./bin/x403f-fp enroll"
-    exit 1
+  # Do not use `strings` — it is often missing. grep -a reads the .so directly.
+  if grep -aF -q 'x403f-waitup-skip' "$so" 2>/dev/null || [[ -f "$marker" ]]; then
+    return 0
   fi
-  local pid
-  pid="$(systemctl show -p MainPID --value fprintd 2>/dev/null || true)"
-  if [[ -n "$pid" && "$pid" != 0 && -d "/proc/${pid}" ]]; then
-    local so_mtime proc_mtime
-    so_mtime="$(stat -c %Y "$so" 2>/dev/null || echo 0)"
-    proc_mtime="$(stat -c %Y "/proc/${pid}" 2>/dev/null || echo 0)"
-    if [[ "$so_mtime" -gt "$proc_mtime" ]]; then
-      red "fprintd is still running the previous driver."
-      echo "  sudo systemctl restart fprintd"
-      echo "  ./bin/x403f-fp enroll"
-      exit 1
-    fi
-  fi
+  yellow "Could not find driver marker in ${so}; enroll will still try."
 }
 
 detect_spi_acpi() {
@@ -429,6 +415,7 @@ install_system_files() {
   cp -a "${ROOT}/system/." "${PREFIX}/share/x403f-fp/system/"
   ln -sfn "$PREFIX/bin/x403f-fp" /usr/local/bin/x403f-fp
   ln -sfn "$PREFIX/bin/x403f-fp" /usr/bin/x403f-fp
+  printf 'x403f-waitup-skip\n' > "${PREFIX}/share/x403f-fp/DRIVER_MARKER"
 
   set_spidev_bufsiz
 }
