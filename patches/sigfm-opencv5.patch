@@ -1,13 +1,13 @@
---- a/libfprint/sigfm/meson.build
-+++ b/libfprint/sigfm/meson.build
-@@ -1,8 +1,8 @@
+diff --git a/libfprint/sigfm/sigfm.cpp b/libfprint/sigfm/sigfm.cpp
+index 0781299..a4ba730 100644
+--- a/libfprint/sigfm/sigfm.cpp
++++ b/libfprint/sigfm/sigfm.cpp
+@@ -123,7 +123,7 @@ SigfmImgInfo* sigfm_extract(const SigfmPix* pix, int width, int height)
+     std::vector<cv::KeyPoint> pts;
  
- sigfm_sources = ['sigfm.cpp']
+     cv::Mat descs;
+-    cv::SIFT::create()->detectAndCompute(img, roi, pts, descs);
++    cv::SIFT::create(64)->detectAndCompute(img, roi, pts, descs);
  
--opencv = dependency('opencv4', required: true, version: '>=4.5.0')
--doctest = dependency('doctest', required: true, version: ['>=2.0.0', '<3.0.0'])
-+opencv = dependency('opencv5', 'opencv4', required: true)
-+doctest = dependency('doctest', required: true)
- 
- libsigfm = static_library('sigfm',
-         sigfm_sources,
+     auto* info = new SigfmImgInfo{pts, descs};
+     return info;
