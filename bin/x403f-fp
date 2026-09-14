@@ -301,6 +301,11 @@ EOF
 }
 
 cmd_verify() {
+  if ! have fprintd-verify; then
+    red "fprintd is not installed. Run: sudo ./install.sh"
+    exit 1
+  fi
+  require_live_driver
   local user
   user="$(fp_session_user)"
   echo "Verifying as ${user}"
@@ -316,7 +321,23 @@ cmd_verify() {
     exit 1
   fi
   echo "Press the corner pad (same as enroll), hold a second, lift."
-  fprintd-verify "$user"
+  local rc=0
+  fprintd-verify "$user" || rc=$?
+  echo
+  echo "Matcher scores (need score >= threshold):"
+  journalctl -u fprintd -n 80 --no-pager 2>/dev/null \
+    | grep -E 'sigfm score|SIGFM match threshold' \
+    | tail -n 20 || echo "  (none in journal — rebuild if this is empty)"
+  if [[ $rc -ne 0 ]]; then
+    echo
+    yellow "verify-no-match: keep the enrolled print and rebuild first if you have not."
+    echo "If scores are 0, the image is not repeatable — try rotation, then re-enroll:"
+    echo "  sudo ./bin/x403f-fp rotate 0"
+    echo "  fprintd-delete \"\$USER\""
+    echo "  ./bin/x403f-fp enroll"
+    echo "  ./bin/x403f-fp verify"
+    return "$rc"
+  fi
 }
 
 cmd_logs() {

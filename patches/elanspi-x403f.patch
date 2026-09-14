@@ -1,5 +1,5 @@
 diff --git a/libfprint/drivers/elanspi.c b/libfprint/drivers/elanspi.c
-index 9338013..c563341 100644
+index 9338013..9f8b365 100644
 --- a/libfprint/drivers/elanspi.c
 +++ b/libfprint/drivers/elanspi.c
 @@ -80,6 +80,9 @@ struct _FpiDeviceElanSpi
@@ -343,7 +343,36 @@ index 9338013..c563341 100644
        fpi_ssm_mark_completed (ssm);
        return;
      }
-@@ -1639,9 +1791,37 @@ elanspi_fp_capture_finish (FpiSsm *ssm, FpDevice *dev, GError *error)
+@@ -1597,11 +1749,28 @@ elanspi_init_finish (FpiSsm *ssm, FpDevice *dev, GError *error)
+   fpi_image_device_activate_complete (idev, error);
+ }
+ 
++static void
++elanspi_apply_match_threshold (FpImageDevice *dev)
++{
++  const gchar *env = g_getenv ("ELANSPI_MATCH_THRESHOLD");
++  gint t = 5;
++
++  if (env && env[0] != '\0')
++    {
++      gint v = g_ascii_strtoll (env, NULL, 10);
++      if (v >= 1 && v <= 1000)
++        t = v;
++    }
++  fpi_image_device_set_bz3_threshold (dev, t);
++  fp_warn ("x403f: SIGFM match threshold %d", t);
++}
++
+ static void
+ elanspi_activate (FpImageDevice *dev)
+ {
+   FpiSsm *ssm = fpi_ssm_new (FP_DEVICE (dev), elanspi_init_ssm_handler, ELANSPI_INIT_NSTATES);
+ 
++  elanspi_apply_match_threshold (dev);
+   fpi_ssm_start (ssm, elanspi_init_finish);
+ }
+ 
+@@ -1639,9 +1808,37 @@ elanspi_fp_capture_finish (FpiSsm *ssm, FpDevice *dev, GError *error)
        return;
      }
  
@@ -383,7 +412,7 @@ index 9338013..c563341 100644
  }
  
  static void
-@@ -1699,9 +1879,16 @@ fpi_device_elanspi_class_init (FpiDeviceElanSpiClass *klass)
+@@ -1699,9 +1896,18 @@ fpi_device_elanspi_class_init (FpiDeviceElanSpiClass *klass)
    dev_class->type = FP_DEVICE_TYPE_UDEV;
    dev_class->id_table = elanspi_id_table;
    dev_class->scan_type = FP_SCAN_TYPE_SWIPE;
@@ -399,7 +428,9 @@ index 9338013..c563341 100644
 +  /* SIGFM (SIFT) matching: NBIS/bozorth3 cannot discriminate fingers on the
 +   * narrow stitched strips these sensors produce. */
 +  img_class->algorithm = FPI_DEVICE_ALGO_SIGFM;
-+  img_class->bz3_threshold = 100;
++  /* SIGFM score is a count of consistent keypoint pairs, not bozorth3.
++   * SIFT is capped at 64–128 features on this tiny pad; 100 never matched. */
++  img_class->bz3_threshold = 5;
    img_class->img_open = elanspi_open;
    img_class->activate = elanspi_activate;
    img_class->deactivate = elanspi_deactivate;
@@ -506,3 +537,16 @@ index 2303f6a..b36564c 100644
      {
        g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR_FAILED,
                                 "No enough keypoints found");
+diff --git a/libfprint/fpi-print.c b/libfprint/fpi-print.c
+index 4368b82..7d3de74 100644
+--- a/libfprint/fpi-print.c
++++ b/libfprint/fpi-print.c
+@@ -305,7 +305,7 @@ fpi_print_sigfm_match (FpPrint * template, FpPrint * print,
+                                              "error in sigfm_match_score");
+           return FPI_MATCH_ERROR;
+         }
+-      fp_dbg ("sigfm score %d/%d", score, bz3_threshold);
++      fp_warn ("sigfm score %d/%d", score, bz3_threshold);
+       if (score >= bz3_threshold)
+         return FPI_MATCH_SUCCESS;
+     }

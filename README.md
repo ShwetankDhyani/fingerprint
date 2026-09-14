@@ -96,14 +96,23 @@ sudo systemctl restart fprintd
 
 ## If verify never matches
 
-```bash
-sudo x403f-fp rotate 2    # 180°
-fprintd-delete "$USER"
-x403f-fp enroll
-x403f-fp verify
+The matcher cutoff used to be 100 (a bozorth3 leftover). SIGFM scores on
+this pad are small integers; rebuild so the cutoff is 5, then verify
+**without deleting** the enrolled print:
 
-sudo x403f-fp rotate 1    # 90° left
-sudo x403f-fp rotate 3    # 90° right
+```bash
+cd ~/fingerprint && git pull && sudo ./install.sh
+./bin/x403f-fp verify
+```
+
+If journal lines show `sigfm score 0/5`, the image is not repeatable.
+Try rotation, then re-enroll:
+
+```bash
+sudo ./bin/x403f-fp rotate 0    # then 2, 1, 3
+fprintd-delete "$USER"
+./bin/x403f-fp enroll
+./bin/x403f-fp verify
 ```
 
 ## Commands

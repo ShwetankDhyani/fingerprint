@@ -28,6 +28,8 @@ if [[ "${1:-}" == "--apply" ]]; then
   grep -q 'entry->hid_id.pid == 0' "$tmp/libfprint/fp-context.c"
   grep -q "dependency('opencv5'" "$tmp/libfprint/sigfm/meson.build"
   grep -q 'x403f-waitup: draining after press' "$tmp/libfprint/drivers/elanspi.c"
+  grep -q 'x403f: SIGFM match threshold' "$tmp/libfprint/drivers/elanspi.c"
+  grep -q 'bz3_threshold = 5' "$tmp/libfprint/drivers/elanspi.c"
   echo "patch applies on pinned libfprint commit"
   rm -rf "$tmp"
 fi

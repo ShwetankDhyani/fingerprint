@@ -15,7 +15,7 @@ index b04154d..defb076 100644
  libsigfm = static_library('sigfm',
          sigfm_sources,
 diff --git a/libfprint/sigfm/sigfm.cpp b/libfprint/sigfm/sigfm.cpp
-index 0781299..a4ba730 100644
+index 0781299..5019066 100644
 --- a/libfprint/sigfm/sigfm.cpp
 +++ b/libfprint/sigfm/sigfm.cpp
 @@ -123,7 +123,7 @@ SigfmImgInfo* sigfm_extract(const SigfmPix* pix, int width, int height)
@@ -23,7 +23,7 @@ index 0781299..a4ba730 100644
  
      cv::Mat descs;
 -    cv::SIFT::create()->detectAndCompute(img, roi, pts, descs);
-+    cv::SIFT::create(64)->detectAndCompute(img, roi, pts, descs);
++    cv::SIFT::create(128)->detectAndCompute(img, roi, pts, descs);
  
      auto* info = new SigfmImgInfo{pts, descs};
      return info;
