@@ -113,9 +113,6 @@ apt_install_deps() {
   else
     extra+=(libdoctest-dev)
   fi
-  if apt-cache show libgusb-dev >/dev/null 2>&1; then
-    extra+=(libgusb-dev)
-  fi
   apt-get install -y --no-install-recommends \
     git meson ninja-build build-essential pkg-config ca-certificates \
     g++ \
