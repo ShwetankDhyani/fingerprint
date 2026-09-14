@@ -175,11 +175,12 @@ cmd_install() {
 Enroll a finger. This sensor is a SWIPE reader sitting in the corner of the
 touchpad (usually top-right). Do not just rest a finger on it:
 
-  x403f-fp enroll
+  sudo ./bin/x403f-fp prepare
+  ./bin/x403f-fp enroll
 
 Then test (fish: use /usr/bin/x403f-fp if the short name is unknown):
 
-  x403f-fp verify
+  ./bin/x403f-fp verify
 
 If verify always says verify-no-match, try:
 
@@ -222,7 +223,7 @@ cmd_prepare() {
   load_spi_modules
   set_spidev_bufsiz
   systemctl restart fprintd.service 2>/dev/null || systemctl restart fprintd
-  sleep 1
+  sleep 2
   green "fprintd restarted, spidev bufsiz=$(cat /sys/module/spidev/parameters/bufsiz 2>/dev/null || echo unknown)"
 }
 
@@ -232,23 +233,45 @@ cmd_enroll() {
     exit 1
   fi
   if [[ ${EUID} -eq 0 ]]; then
-    cmd_prepare
+    local bufsiz
+    bufsiz="$(spidev_current_bufsiz || true)"
+    if [[ "$bufsiz" != "32768" ]]; then
+      cmd_prepare
+    else
+      bind_spidev || true
+    fi
   fi
   cat <<'EOF'
+Close System Settings / any other fingerprint window first.
+
 Swipe slowly across the sensor in the CORNER of the touchpad (usually top-right).
-You need about 12 swipes. After each "enroll-stage-passed":
-  1. lift your finger fully off
+You need 8 swipes. After each "enroll-stage-passed":
+  1. lift your finger fully off for a second
   2. swipe again slowly
+If nothing prints after a swipe, lift and swipe again — do not wait minutes.
 Do not press Ctrl+C. Wait for enroll-completed.
+
 EOF
   local finger="${1:-right-index-finger}"
   local user="${SUDO_USER:-$USER}"
+  if [[ ${EUID} -eq 0 && -n "${SUDO_USER:-}" ]]; then
+    user="$SUDO_USER"
+  fi
   local rc=0
   fprintd-enroll -f "$finger" "$user" || rc=$?
   if [[ $rc -ne 0 ]]; then
     echo
     yellow "Enrollment failed. Last fprintd log lines:"
     journalctl -u fprintd -n 40 --no-pager || true
+    if journalctl -u fprintd -n 80 --no-pager 2>/dev/null | grep -q 'overheating'; then
+      echo
+      yellow "libfprint stopped the sensor (software thermal cutoff after ~3 minutes of continuous capture)."
+      echo "That usually means the driver never saw finger-off after the first swipe."
+      echo "Rebuild the patched driver, wait a few seconds, then enroll as your user (not sudo):"
+      echo "  cd ~/fingerprint && git pull && sudo ./install.sh"
+      echo "  sudo systemctl restart fprintd"
+      echo "  ./bin/x403f-fp enroll"
+    fi
   fi
   return "$rc"
 }

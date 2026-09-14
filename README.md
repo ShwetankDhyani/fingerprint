@@ -36,8 +36,9 @@ Already cloned?
 ```bash
 cd ~/fingerprint
 git pull
-sudo ./bin/x403f-fp prepare
-sudo ./bin/x403f-fp enroll
+sudo ./install.sh
+sudo systemctl restart fprintd
+./bin/x403f-fp enroll
 ```
 
 `install.sh` needs network (to fetch libfprint), a compiler, and a few minutes.
@@ -66,6 +67,23 @@ Password login stays available.
 The Linux driver is a **swipe** driver. The sensor is the small pad in a corner
 of the touchpad (usually top-right). Swipe slowly across it. A static press
 times out (`enroll-unknown-error` / `timed out waiting for image`).
+
+Close **System Settings → Users → Fingerprint** while using the CLI. Two
+clients claiming the reader at once produces `Device was already claimed`
+and `enroll-disconnected`.
+
+If you see one `enroll-stage-passed` and then `enroll-disconnected` with
+`Device disabled to prevent overheating` in the journal: the old driver kept
+capturing after the first swipe until libfprint’s 3-minute cutoff. Pull and
+reinstall, restart fprintd, then enroll as your user:
+
+```bash
+cd ~/fingerprint
+git pull
+sudo ./install.sh
+sudo systemctl restart fprintd
+./bin/x403f-fp enroll
+```
 
 ## If verify never matches
 
@@ -104,7 +122,11 @@ commit `07306bbc` (libfprint 1.94.5 + SIGFM):
   touchpad still matches.
 - HID reset failure is a warning, not a hard error (ASUS `ResetType=GPIO`).
 - OTP / VCOM timeout 12 ms → 2 s (the Fedora X403F failure mode).
-- Longer capture timeouts; more enroll stages.
+- Longer capture timeouts; 8 enroll stages.
+- After a swipe, wait at most 1.2 s for “finger off” (this SKU often never
+  classifies as empty; the old wait spun until the 180 s thermal cutoff).
+- Treat UNKNOWN frames as empty during wait-up; looser empty/movement thresholds.
+- Disable the software thermal model (`temp_hot_seconds = -1`).
 - SIGFM matcher + Gaussian denoise; drop 2× upscale and `FPI_IMAGE_PARTIAL`
   (those made verification useless on this class of sensor).
 - `ELANSPI_ROTATE` so rotation can be changed without rebuilding.
