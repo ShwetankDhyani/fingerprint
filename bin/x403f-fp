@@ -26,6 +26,7 @@ Usage:
        x403f-fp enroll      Enroll a finger (swipe, do not just press)
        x403f-fp verify      Test a match
   sudo x403f-fp rotate N    0=none 1=90°left 2=180° 3=90°right (then re-enroll)
+  sudo x403f-fp prepare     Restart fprintd and enlarge the SPI buffer
        x403f-fp logs        Tail fprintd / libfprint messages
        x403f-fp help
 
@@ -213,18 +214,44 @@ cmd_uninstall() {
   echo "Distro libfprint (if installed) is untouched. fprintd may still be present."
 }
 
+cmd_prepare() {
+  need_root
+  if [[ -e /sys/module/spidev/parameters/bufsiz ]]; then
+    echo 32768 > /sys/module/spidev/parameters/bufsiz
+  fi
+  systemctl restart fprintd.service 2>/dev/null || systemctl restart fprintd
+  sleep 1
+  green "fprintd restarted, spidev bufsiz=$(cat /sys/module/spidev/parameters/bufsiz 2>/dev/null || echo unknown)"
+}
+
 cmd_enroll() {
   if ! have fprintd-enroll; then
-    red "fprintd is not installed. Run: sudo x403f-fp install"
+    red "fprintd is not installed. Run: sudo ./bin/x403f-fp install"
     exit 1
   fi
   cat <<'EOF'
-Swipe slowly across the sensor in the corner of the touchpad.
-You will be asked several times. Vary the starting point a little.
+Swipe slowly across the sensor in the CORNER of the touchpad (usually top-right).
+You need about 12 swipes. After each "enroll-stage-passed":
+  1. lift your finger fully off
+  2. swipe again slowly
+Do not press Ctrl+C. Wait for enroll-completed.
+
+If the last try said enroll-disconnected, run this first:
+  sudo ./bin/x403f-fp prepare
 
 EOF
   local finger="${1:-right-index-finger}"
-  fprintd-enroll -f "$finger" "$USER"
+  local user="${SUDO_USER:-$USER}"
+  local rc=0
+  fprintd-enroll -f "$finger" "$user" || rc=$?
+  if [[ $rc -ne 0 ]]; then
+    echo
+    yellow "Enrollment failed. Last fprintd log lines:"
+    journalctl -u fprintd -n 40 --no-pager || true
+    echo
+    echo "Then: sudo ./bin/x403f-fp prepare && ./bin/x403f-fp enroll"
+  fi
+  return "$rc"
 }
 
 cmd_verify() {
@@ -247,6 +274,7 @@ main() {
     probe)     cmd_probe "$@" ;;
     status)    cmd_status "$@" ;;
     enroll)    cmd_enroll "$@" ;;
+    prepare)   cmd_prepare "$@" ;;
     verify)    cmd_verify "$@" ;;
     rotate)    need_root; set_rotation "${1:-}" ;;
     logs)      cmd_logs "$@" ;;
