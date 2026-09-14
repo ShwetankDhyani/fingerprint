@@ -1,0 +1,212 @@
+--- a/libfprint/drivers/elanspi.h
++++ b/libfprint/drivers/elanspi.h
+@@ -339,7 +339,12 @@
+ #define ELANSPI_TP_VID 0x04f3
+ 
+ // using checkargs ACPI:HIDPID
++/* pid 0 = match any ELAN HID companion (see fp-context.c wildcard).
++ * Specific PIDs come first so rotation metadata is used when known.
++ * 0x3128 is the ASUS VivoBook 14 X403F / X403FA touchpad companion. */
+ static const FpIdEntry elanspi_id_table[] = {
++  {.udev_types = ELANSPI_UDEV_TYPES, .spi_acpi_id = "ELAN7001", .hid_id = {.vid = ELANSPI_TP_VID, .pid = 0x3128}, .driver_data = ELANSPI_NO_ROTATE},
++  {.udev_types = ELANSPI_UDEV_TYPES, .spi_acpi_id = "ELAN7002", .hid_id = {.vid = ELANSPI_TP_VID, .pid = 0x3128}, .driver_data = ELANSPI_NO_ROTATE},
+   {.udev_types = ELANSPI_UDEV_TYPES, .spi_acpi_id = "ELAN7001", .hid_id = {.vid = ELANSPI_TP_VID, .pid = 0x3057}, .driver_data = ELANSPI_180_ROTATE},
+   {.udev_types = ELANSPI_UDEV_TYPES, .spi_acpi_id = "ELAN7001", .hid_id = {.vid = ELANSPI_TP_VID, .pid = 0x3087}, .driver_data = ELANSPI_180_ROTATE},
+   {.udev_types = ELANSPI_UDEV_TYPES, .spi_acpi_id = "ELAN7001", .hid_id = {.vid = ELANSPI_TP_VID, .pid = 0x30c6}, .driver_data = ELANSPI_180_ROTATE},
+@@ -349,6 +354,16 @@
+   {.udev_types = ELANSPI_UDEV_TYPES, .spi_acpi_id = "ELAN70A1", .hid_id = {.vid = ELANSPI_TP_VID, .pid = 0x30b2}, .driver_data = ELANSPI_NO_ROTATE},
+   {.udev_types = ELANSPI_UDEV_TYPES, .spi_acpi_id = "ELAN7001", .hid_id = {.vid = ELANSPI_TP_VID, .pid = 0x309f}, .driver_data = ELANSPI_180_ROTATE},
+   {.udev_types = ELANSPI_UDEV_TYPES, .spi_acpi_id = "ELAN7001", .hid_id = {.vid = ELANSPI_TP_VID, .pid = 0x241f}, .driver_data = ELANSPI_NO_ROTATE},
++  {.udev_types = ELANSPI_UDEV_TYPES, .spi_acpi_id = "ELAN7001", .hid_id = {.vid = ELANSPI_TP_VID, .pid = 0x2766}, .driver_data = ELANSPI_NO_ROTATE},
++  {.udev_types = ELANSPI_UDEV_TYPES, .spi_acpi_id = "ELAN7001", .hid_id = {.vid = ELANSPI_TP_VID, .pid = 0x3104}, .driver_data = ELANSPI_90RIGHT_ROTATE},
++  {.udev_types = ELANSPI_UDEV_TYPES, .spi_acpi_id = "ELAN7001", .hid_id = {.vid = ELANSPI_TP_VID, .pid = 0x3028}, .driver_data = ELANSPI_90LEFT_ROTATE},
++  {.udev_types = ELANSPI_UDEV_TYPES, .spi_acpi_id = "ELAN7001", .hid_id = {.vid = ELANSPI_TP_VID, .pid = 0x304d}, .driver_data = ELANSPI_90LEFT_ROTATE},
++  {.udev_types = ELANSPI_UDEV_TYPES, .spi_acpi_id = "ELAN7001", .hid_id = {.vid = ELANSPI_TP_VID, .pid = 0x3059}, .driver_data = ELANSPI_90LEFT_ROTATE},
++  {.udev_types = ELANSPI_UDEV_TYPES, .spi_acpi_id = "ELAN7001", .hid_id = {.vid = ELANSPI_TP_VID, .pid = 0x306f}, .driver_data = ELANSPI_90LEFT_ROTATE},
++  {.udev_types = ELANSPI_UDEV_TYPES, .spi_acpi_id = "ELAN7001", .hid_id = {.vid = ELANSPI_TP_VID, .pid = 0x22fe}, .driver_data = ELANSPI_90LEFT_ROTATE},
++  {.udev_types = ELANSPI_UDEV_TYPES, .spi_acpi_id = "ELAN7001", .hid_id = {.vid = ELANSPI_TP_VID, .pid = 0x0000}, .driver_data = ELANSPI_NO_ROTATE},
++  {.udev_types = ELANSPI_UDEV_TYPES, .spi_acpi_id = "ELAN7002", .hid_id = {.vid = ELANSPI_TP_VID, .pid = 0x0000}, .driver_data = ELANSPI_NO_ROTATE},
++  {.udev_types = ELANSPI_UDEV_TYPES, .spi_acpi_id = "ELAN70A1", .hid_id = {.vid = ELANSPI_TP_VID, .pid = 0x0000}, .driver_data = ELANSPI_NO_ROTATE},
+   {.udev_types = 0}
+ };
+ 
+@@ -376,7 +391,7 @@
+ 
+ #define ELANSPI_HV_SENSOR_FRAME_DELAY 23
+ 
+-#define ELANSPI_OTP_TIMEOUT_USEC (12 * 1000)
++#define ELANSPI_OTP_TIMEOUT_USEC (2000 * 1000)
+ 
+-#define ELANSPI_OLD_CAPTURE_TIMEOUT_USEC (100 * 1000)
+-#define ELANSPI_HV_CAPTURE_TIMEOUT_USEC (50 * 1000)
++#define ELANSPI_OLD_CAPTURE_TIMEOUT_USEC (500 * 1000)
++#define ELANSPI_HV_CAPTURE_TIMEOUT_USEC (250 * 1000)
+--- a/libfprint/drivers/elanspi.c
++++ b/libfprint/drivers/elanspi.c
+@@ -97,15 +97,23 @@
+   if (g_strcmp0 (g_getenv ("FP_DEVICE_EMULATION"), "1") == 0)
+     return;
+ 
+-  /*
+-   * TODO: Make this also work with the non-HID cases
+-   */
++  /* ASUS VivoBook X403F Windows INF uses GPIO reset (ResetType=2), not
++   * touchpad-PTP HID reset. HID feature 0x0e still works on many units,
++   * but failing it must not abort init — SW reset is enough. */
++  (void) err;
+ 
+-  int fd = open ((char *) fpi_device_get_udev_data (FP_DEVICE (self), FPI_DEVICE_UDEV_SUBTYPE_HIDRAW), O_RDWR);
++  const char *path = (char *) fpi_device_get_udev_data (FP_DEVICE (self), FPI_DEVICE_UDEV_SUBTYPE_HIDRAW);
++  if (!path)
++    {
++      fp_warn ("no hidraw path; skipping HID reset");
++      return;
++    }
++
++  int fd = open (path, O_RDWR);
+ 
+   if (fd < 0)
+     {
+-      g_set_error (err, G_IO_ERROR, g_io_error_from_errno (errno), "unable to open hid");
++      fp_warn ("unable to open hid (%s); continuing with SW reset", g_strerror (errno));
+       return;
+     }
+ 
+@@ -114,12 +122,8 @@
+   };
+ 
+   if (ioctl (fd, HIDIOCSFEATURE (5), &buf) != 5)
+-    {
+-      g_set_error (err, G_IO_ERROR, g_io_error_from_errno (errno), "unable to reset via hid");
+-      goto out;
+-    }
++    fp_warn ("HID feature reset failed (%s); continuing with SW reset", g_strerror (errno));
+ 
+-out:
+   close (fd);
+ }
+ 
+@@ -1171,10 +1175,25 @@
+   return count;
+ }
+ 
++static int
++elanspi_get_rotation (FpiDeviceElanSpi *self)
++{
++  const gchar *env = g_getenv ("ELANSPI_ROTATE");
++
++  if (env && env[0] != '\0')
++    {
++      int v = g_ascii_strtoll (env, NULL, 10);
++      if (v >= 0 && v <= 3)
++        return v;
++    }
++
++  return fpi_device_get_driver_data (FP_DEVICE (self)) & 3;
++}
++
+ static guint16
+ elanspi_lookup_pixel_with_rotation (FpiDeviceElanSpi *self, const guint16 *data_in, int y, int x)
+ {
+-  int rotation = fpi_device_get_driver_data (FP_DEVICE (self)) & 3;
++  int rotation = elanspi_get_rotation (self);
+   gint x1 = x, y1 = y;
+ 
+   if (rotation == ELANSPI_180_ROTATE)
+@@ -1329,11 +1348,50 @@
+   return frame->data[y * ctx->frame_width + x];
+ }
+ 
++/* Separable gaussian smoothing (sigma ~1.2). Suppresses sensor-noise speckle
++ * that otherwise produces spurious, non-repeatable image features. */
++static void
++elanspi_smooth_image (FpImage *img)
++{
++  static const guint kern[7] = { 34, 111, 218, 298, 218, 111, 34 };
++  guint w = img->width, h = img->height;
++  g_autofree guint8 *tmp = g_malloc (w * h);
++  guint8 *data = (guint8 *) img->data;
++
++  for (guint y = 0; y < h; y++)
++    for (guint x = 0; x < w; x++)
++      {
++        guint acc = 0, wsum = 0;
++        for (gint k = -3; k <= 3; k++)
++          {
++            gint xx = (gint) x + k;
++            if (xx < 0 || xx >= (gint) w)
++              continue;
++            acc += kern[k + 3] * data[y * w + xx];
++            wsum += kern[k + 3];
++          }
++        tmp[y * w + x] = acc / wsum;
++      }
++  for (guint y = 0; y < h; y++)
++    for (guint x = 0; x < w; x++)
++      {
++        guint acc = 0, wsum = 0;
++        for (gint k = -3; k <= 3; k++)
++          {
++            gint yy = (gint) y + k;
++            if (yy < 0 || yy >= (gint) h)
++              continue;
++            acc += kern[k + 3] * tmp[yy * w + x];
++            wsum += kern[k + 3];
++          }
++        data[y * w + x] = acc / wsum;
++      }
++}
++
+ static void
+ elanspi_fp_frame_stitch_and_submit (FpiDeviceElanSpi *self)
+ {
+   g_autoptr(FpImage) img = NULL;
+-  g_autoptr(FpImage) scaled = NULL;
+   struct fpi_frame_asmbl_ctx assembling_ctx = {
+     .image_width = (self->frame_width * 3) / 2,
+ 
+@@ -1348,12 +1406,15 @@
+ 
+   fpi_do_movement_estimation (&assembling_ctx, frame_start);
+   img = fpi_assemble_frames (&assembling_ctx, frame_start);
+-  scaled = fpi_image_resize (img, 2, 2);
+ 
+-  scaled->flags |= FPI_IMAGE_PARTIAL | FPI_IMAGE_COLORS_INVERTED;
++  /* Native scale (~10 px ridge period) is already in SIGFM's expected band.
++   * 2x upscale starves feature extraction; FPI_IMAGE_PARTIAL culls most
++   * minutiae on these narrow strips. */
++  elanspi_smooth_image (img);
++  img->flags |= FPI_IMAGE_COLORS_INVERTED;
+ 
+   /* submit image */
+-  fpi_image_device_image_captured (FP_IMAGE_DEVICE (self), g_steal_pointer (&scaled));
++  fpi_image_device_image_captured (FP_IMAGE_DEVICE (self), g_steal_pointer (&img));
+ 
+   /* clean out frame data */
+   g_slist_free_full (g_steal_pointer (&self->fp_frame_list), g_free);
+@@ -1699,9 +1760,12 @@
+   dev_class->type = FP_DEVICE_TYPE_UDEV;
+   dev_class->id_table = elanspi_id_table;
+   dev_class->scan_type = FP_SCAN_TYPE_SWIPE;
+-  dev_class->nr_enroll_stages = 7;       /* these sensors are very hit or miss, may as well record a few extras */
++  dev_class->nr_enroll_stages = 12;      /* extra stages for the small ASUS corner sensor */
+ 
+-  img_class->bz3_threshold = 24;
++  /* SIGFM (SIFT) matching: NBIS/bozorth3 cannot discriminate fingers on the
++   * narrow stitched strips these sensors produce. */
++  img_class->algorithm = FPI_DEVICE_ALGO_SIGFM;
++  img_class->bz3_threshold = 100;
+   img_class->img_open = elanspi_open;
+   img_class->activate = elanspi_activate;
+   img_class->deactivate = elanspi_deactivate;
+--- a/libfprint/fp-context.c
++++ b/libfprint/fp-context.c
+@@ -529,7 +529,7 @@
+                     if (sscanf (hid_id, "%*X:%X:%X", &vendor, &product) != 2)
+                       continue;
+ 
+-                    if (vendor == entry->hid_id.vid && product == entry->hid_id.pid)
++                    if (vendor == entry->hid_id.vid && (entry->hid_id.pid == 0 || product == entry->hid_id.pid))
+                       break;
+                   }
+                 /* If match was not found exit */

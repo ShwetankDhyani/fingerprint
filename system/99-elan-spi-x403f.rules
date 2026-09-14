@@ -1,0 +1,5 @@
+# Bind the ASUS VivoBook X403F Elan SPI fingerprint sensor to spidev.
+# Kernel >= 4.20. The device never appears in lsusb — it is ACPI SPI.
+ACTION=="add|change", SUBSYSTEM=="spi", ENV{MODALIAS}=="acpi:ELAN7001:", PROGRAM+="/bin/sh -c '/sbin/modprobe spidev && echo spidev > %S%p/driver_override && echo %k > %S%p/subsystem/drivers/spidev/bind'"
+ACTION=="add|change", SUBSYSTEM=="spi", ENV{MODALIAS}=="acpi:ELAN7002:", PROGRAM+="/bin/sh -c '/sbin/modprobe spidev && echo spidev > %S%p/driver_override && echo %k > %S%p/subsystem/drivers/spidev/bind'"
+ACTION=="add|change", SUBSYSTEM=="spi", ENV{MODALIAS}=="acpi:ELAN70A1:", PROGRAM+="/bin/sh -c '/sbin/modprobe spidev && echo spidev > %S%p/driver_override && echo %k > %S%p/subsystem/drivers/spidev/bind'"

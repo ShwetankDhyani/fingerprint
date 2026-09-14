@@ -1,0 +1,252 @@
+#!/usr/bin/env bash
+# ASUS VivoBook X403F / X403FA fingerprint helper for Ubuntu.
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -f "${SCRIPT_DIR}/../scripts/common.sh" ]]; then
+  # shellcheck source=../scripts/common.sh
+  source "${SCRIPT_DIR}/../scripts/common.sh"
+elif [[ -f "${SCRIPT_DIR}/../share/x403f-fp/scripts/common.sh" ]]; then
+  # shellcheck disable=SC1091
+  source "${SCRIPT_DIR}/../share/x403f-fp/scripts/common.sh"
+else
+  echo "Cannot find scripts/common.sh" >&2
+  exit 1
+fi
+
+usage() {
+  cat <<'EOF'
+x403f-fp — make the ASUS VivoBook X403F Elan fingerprint sensor work on Ubuntu
+
+Usage:
+  sudo x403f-fp install     Build patched libfprint, bind SPI, enable fprintd
+  sudo x403f-fp uninstall   Remove the patched driver and restore distro files
+       x403f-fp probe       Show what the kernel can see (no root required)
+       x403f-fp status      Driver, spidev, fprintd, enrolled prints
+       x403f-fp enroll      Enroll a finger (swipe, do not just press)
+       x403f-fp verify      Test a match
+  sudo x403f-fp rotate N    0=none 1=90°left 2=180° 3=90°right (then re-enroll)
+       x403f-fp logs        Tail fprintd / libfprint messages
+       x403f-fp help
+
+The X403F reader is ACPI SPI (ELAN7001 + touchpad HID 04F3:3128). It never
+shows up in lsusb. Ubuntu's stock libfprint either misses the PID, times out
+during OTP/vcom init, or enrolls prints that never verify. This tool patches
+the elanspi driver and swaps in the SIGFM matcher.
+EOF
+}
+
+cmd_probe() {
+  bold "Machine"
+  echo "  $(cat /sys/class/dmi/id/product_name 2>/dev/null || echo unknown)  $(cat /sys/class/dmi/id/product_version 2>/dev/null || true)"
+  echo "  kernel $(uname -r)"
+  echo
+
+  bold "SPI fingerprint (expected: spi-ELAN7001:00 or ELAN7002)"
+  if acpi="$(detect_spi_acpi)"; then
+    green "  found ${acpi}"
+    local sys="/sys/bus/spi/devices/${acpi}"
+    echo "  driver: $(basename "$(readlink -f "${sys}/driver" 2>/dev/null || echo none)")"
+    echo "  modalias: $(cat "${sys}/modalias" 2>/dev/null || echo '?')"
+  else
+    red "  no ELAN7xxx SPI device under /sys/bus/spi/devices"
+    echo "  loaded modules:"
+    if have lsmod; then
+      lsmod | grep -E 'lpss|spidev|pxa2xx|hid_generic|i2c_hid' || echo "    (none of the usual SPI/HID modules)"
+    elif [[ -r /proc/modules ]]; then
+      grep -E 'lpss|spidev|pxa2xx|hid_generic|i2c_hid' /proc/modules || echo "    (none of the usual SPI/HID modules)"
+    else
+      echo "    (lsmod not available in this environment)"
+    fi
+  fi
+  echo
+
+  bold "spidev nodes"
+  local nodes
+  nodes="$(spidev_nodes || true)"
+  if [[ -n "${nodes}" ]]; then
+    green "$(printf '%s\n' "$nodes" | sed 's/^/  /')"
+    if [[ -e /sys/module/spidev/parameters/bufsiz ]]; then
+      echo "  bufsiz=$(cat /sys/module/spidev/parameters/bufsiz)"
+    fi
+  else
+    yellow "  none — installer will bind spidev to the ACPI device"
+  fi
+  echo
+
+  bold "Companion HID (touchpad, used for reset) — look for 04F3:3128"
+  local pids
+  pids="$(list_elan_hid_pids || true)"
+  if [[ -n "$pids" ]]; then
+    printf '%s\n' "$pids" | sed 's/^/  /'
+  else
+    yellow "  no 04F3 HID devices (touchpad driver may not be loaded)"
+  fi
+  echo
+
+  bold "USB fingerprint devices (this chassis normally has none)"
+  local usb
+  usb="$(detect_goodix_usb; detect_elan_usb)"
+  if [[ -n "$usb" ]]; then
+    printf '%s\n' "$usb" | sed 's/^/  /'
+    if detect_goodix_usb >/dev/null; then
+      yellow "  Goodix USB reader detected. This installer still helps for SPI,"
+      echo "  but you may also want: sudo apt install fprintd libpam-fprintd"
+    fi
+  else
+    echo "  none (expected for X403F)"
+  fi
+  echo
+
+  bold "fprintd"
+  if have fprintd-enroll; then
+    echo "  fprintd-enroll: $(command -v fprintd-enroll)"
+    systemctl is-active fprintd >/dev/null 2>&1 && echo "  service: active" || echo "  service: inactive (starts on demand)"
+  else
+    yellow "  not installed yet"
+  fi
+}
+
+cmd_status() {
+  cmd_probe
+  echo
+  bold "Patched libfprint"
+  if [[ -e "${LIBDIR}/libfprint-2.so.2" ]]; then
+    green "  ${LIBDIR}/libfprint-2.so.2"
+    echo "  $(file -b "${LIBDIR}/libfprint-2.so.2" 2>/dev/null | cut -c1-80 || true)"
+  else
+    yellow "  not installed — run: sudo x403f-fp install"
+  fi
+  if [[ -e /etc/systemd/system/fprintd.service.d/x403f.conf ]]; then
+    echo "  systemd drop-in:"
+    sed 's/^/    /' /etc/systemd/system/fprintd.service.d/x403f.conf
+  fi
+  echo
+  bold "Devices fprintd can see"
+  if have fprintd-list; then
+    fprintd-list "$USER" 2>&1 | sed 's/^/  /' || true
+  else
+    echo "  fprintd-list not available"
+  fi
+}
+
+cmd_install() {
+  need_root
+  bold "1/6 Installing build dependencies and fprintd"
+  apt_install_deps
+
+  bold "2/6 Loading SPI / HID kernel modules and binding spidev"
+  load_spi_modules
+  bind_spidev
+
+  if ! detect_spi_acpi >/dev/null; then
+    yellow "No ELAN SPI device yet. Continuing to build the driver anyway."
+    yellow "If probe still shows nothing after a reboot, check BIOS and dmesg."
+  fi
+
+  bold "3/6 Fetching libfprint ${PINNED_COMMIT}"
+  clone_libfprint
+
+  bold "4/6 Applying X403F elanspi patch (PID 3128, OTP timeout, SIGFM, GPIO reset)"
+  apply_patch
+
+  bold "5/6 Building and installing into ${PREFIX}"
+  build_libfprint
+  install_libfprint
+  install_system_files
+  load_spi_modules
+  bind_spidev
+  reload_services
+  enable_pam
+
+  bold "6/6 Checking the reader"
+  sleep 1
+  cmd_status
+
+  echo
+  green "Install finished."
+  cat <<'EOF'
+
+Enroll a finger. This sensor is a SWIPE reader sitting in the corner of the
+touchpad (usually top-right). Do not just rest a finger on it:
+
+  x403f-fp enroll
+
+Then test:
+
+  x403f-fp verify
+
+If verify always says verify-no-match, try:
+
+  sudo x403f-fp rotate 2     # then 1, then 3
+  fprintd-delete "$USER"
+  x403f-fp enroll
+
+GNOME: Settings → Users → Fingerprint Login
+EOF
+}
+
+cmd_uninstall() {
+  need_root
+  rm -f /etc/udev/rules.d/99-elan-spi-x403f.rules \
+        /etc/udev/rules.d/99-fingerprint-perms.rules \
+        /etc/modprobe.d/spidev-x403f.conf \
+        /etc/modules-load.d/x403f-fingerprint.conf \
+        /etc/systemd/system/fprintd.service.d/x403f.conf \
+        /usr/local/bin/x403f-fp
+  rmdir /etc/systemd/system/fprintd.service.d 2>/dev/null || true
+  rm -rf "$PREFIX"
+  udevadm control --reload-rules || true
+  systemctl daemon-reload
+  systemctl restart fprintd.service 2>/dev/null || true
+  green "Removed patched libfprint and X403F udev/modprobe files."
+  echo "Distro libfprint (if installed) is untouched. fprintd may still be present."
+}
+
+cmd_enroll() {
+  if ! have fprintd-enroll; then
+    red "fprintd is not installed. Run: sudo x403f-fp install"
+    exit 1
+  fi
+  cat <<'EOF'
+Swipe slowly across the sensor in the corner of the touchpad.
+You will be asked several times. Vary the starting point a little.
+
+EOF
+  local finger="${1:-right-index-finger}"
+  fprintd-enroll -f "$finger" "$USER"
+}
+
+cmd_verify() {
+  fprintd-verify "$USER"
+}
+
+cmd_logs() {
+  journalctl -u fprintd -e -n 80 --no-pager || true
+  echo
+  echo "Live (Ctrl-C to stop):"
+  journalctl -u fprintd -f
+}
+
+main() {
+  local cmd="${1:-help}"
+  shift || true
+  case "$cmd" in
+    install)   cmd_install "$@" ;;
+    uninstall) cmd_uninstall "$@" ;;
+    probe)     cmd_probe "$@" ;;
+    status)    cmd_status "$@" ;;
+    enroll)    cmd_enroll "$@" ;;
+    verify)    cmd_verify "$@" ;;
+    rotate)    need_root; set_rotation "${1:-}" ;;
+    logs)      cmd_logs "$@" ;;
+    -h|--help|help) usage ;;
+    *)
+      red "Unknown command: $cmd"
+      usage
+      exit 1
+      ;;
+  esac
+}
+
+main "$@"

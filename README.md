@@ -1,141 +1,120 @@
-# Lynx Web Solutions
+# ASUS VivoBook X403F fingerprint on Ubuntu
 
-Production marketing + transactional site for **Lynx Web Solutions** ([www.lynxweb.in](https://www.lynxweb.in)).
+The fingerprint reader on the **ASUS VivoBook 14 X403F / X403FA / X403FAC**
+works on Windows and is ignored or broken on Ubuntu. This repo makes it work.
 
-## Stack
+It is **not a USB device**. `lsusb` will not show it. The chip is an Elan SPI
+sensor (`ACPI ELAN7001` / `ELAN7002`) sitting in the corner of the touchpad,
+paired with HID `04F3:3128` (`ELAN1301`). Ubuntu’s packaged `libfprint` either:
 
-- Next.js App Router + TypeScript
-- Tailwind CSS v4 + shadcn/ui
-- Framer Motion, React Hook Form, Zod
-- Resend + React Email
-- Supabase (Postgres + RLS)
-- **Cashfree** (only payment provider — India + international)
-- WhatsApp click-to-chat
+- never binds `spidev` to the ACPI node,
+- does not list product ID `0x3128`,
+- times out during OTP / VCOM init (`timed out waiting for vcom detection`),
+- treats HID reset failure as fatal (this SKU uses **GPIO** reset in the ASUS
+  Windows INF),
+- or enrolls prints that never verify, because NBIS cannot match the narrow
+  swipe strips these sensors produce.
 
-## Payment model (packaged plans)
+This installer builds a patched `libfprint` (elanspi + SIGFM matcher), installs
+it under `/opt/asus-x403f-fp` so the distro library stays untouched, and points
+**only** `fprintd` at it.
 
-Checkout charges a **booking advance**, not the full project fee:
-
-| Plan | Project total | Advance online | Balance |
-| --- | --- | --- | --- |
-| Starter | ₹14,999 | 50% (₹7,500) | Before go-live |
-| Growth | ₹34,999 | 40% (₹14,000) | Before go-live |
-| Premium | ₹69,999 | 40% (₹28,000) | Milestones / before go-live |
-
-Kickoff starts after the advance clears. Remaining balance is invoiced separately.
-
-## Run locally
+## On the laptop
 
 ```bash
-cp .env.example .env.local
-npm install
-npm run dev
+sudo apt update
+sudo apt install -y git
+git clone <this-repo>
+cd <this-repo>
+sudo ./install.sh
+x403f-fp enroll
+x403f-fp verify
 ```
 
-Open [http://127.0.0.1:43127](http://127.0.0.1:43127).
+`install.sh` needs network (to fetch libfprint), a compiler, and about 5 minutes.
 
-Without payment/email/DB secrets, the app still runs in development: leads log locally, checkout returns mock orders, and WhatsApp uses the configured public number. **Production refuses mock payments and requires Cashfree + Supabase.**
+Then enable fingerprint login:
 
-## Backend map
+```bash
+sudo pam-auth-update --enable fprintd
+```
 
-| Area | Path |
+Keep “Unix authentication” ticked so a password still works.
+
+GNOME: **Settings → Users → Fingerprint Login**.
+
+## Swipe, don’t press
+
+The Linux driver is a **swipe** driver. The sensor is the small pad in a corner
+of the touchpad (usually top-right). Swipe slowly across it. A static press
+times out (`enroll-unknown-error` / `timed out waiting for image`).
+
+## If verify never matches
+
+Rotation of the sensor vs the touchpad is per-PID. For `04F3:3128` the default
+is no rotation. Try the others and re-enroll:
+
+```bash
+sudo x403f-fp rotate 2    # 180°
+fprintd-delete "$USER"
+x403f-fp enroll
+x403f-fp verify
+
+sudo x403f-fp rotate 1    # 90° left
+sudo x403f-fp rotate 3    # 90° right
+```
+
+## Commands
+
+| Command | What it does |
 | --- | --- |
-| Lead server action | `src/app/actions/contact.ts` |
-| Email templates | `src/emails/` |
-| Cashfree create order | `POST /api/payments/cashfree/create-order` |
-| Cashfree verify | `POST /api/payments/cashfree/verify` |
-| Cashfree webhook | `POST /api/webhooks/cashfree` |
-| Outbound mail (single path, logged) | `src/lib/email/mailer.ts`, `src/lib/email/notifications.ts` |
-| Quote advance order | `POST /api/payments/quote/create-order` |
-| Invoice payment order | `POST /api/payments/invoice/create-order` |
-| Payment settlement (quote / invoice) | `src/lib/payments/settlement.ts` |
-| Daily project digest (Vercel cron) | `GET /api/cron/project-digest` |
-| SQL schema + RLS | `supabase/schema.sql` |
-| Portal schema (auth/orgs/quotes) | `supabase/portal_schema.sql` |
-| Portal upgrade (tokens/tickets/email log) | `supabase/portal_upgrade.sql` |
-| Admin portal | `/admin` |
-| Client portal | `/client` |
-| Support tickets | `/admin/tickets`, `/client/support` |
-| Email + service diagnostics | `/admin/settings` |
-| Login / invite | `/login`, `/invite/[token]` |
-| Public quote | `/q/[quoteNumber]?t=…` |
-| Privacy / Terms | `/privacy`, `/terms` |
+| `x403f-fp probe` | ACPI SPI node, HID PID, `/dev/spidev*`, USB IDs |
+| `sudo x403f-fp install` | deps, patch, build, udev, PAM |
+| `x403f-fp status` | probe + whether the patched library is loaded |
+| `x403f-fp enroll [finger]` | default `right-index-finger` |
+| `x403f-fp verify` | test a match |
+| `sudo x403f-fp rotate N` | `0..3`, then re-enroll |
+| `x403f-fp logs` | `journalctl -u fprintd` |
+| `sudo x403f-fp uninstall` | remove `/opt` driver and udev rules |
 
-## Cashfree setup (production)
+## What the patch changes
 
-1. Create / open a Cashfree merchant account and generate **App ID** + **Secret Key**.
-2. Enable UPI, cards, net banking, and international cards as needed.
-3. Set on Vercel:
-   - `CASHFREE_APP_ID`
-   - `CASHFREE_SECRET_KEY`
-   - `CASHFREE_ENV=production`
-   - `NEXT_PUBLIC_CASHFREE_MODE=production`
-   - `NEXT_PUBLIC_SITE_URL=https://www.lynxweb.in`
-4. Whitelist `www.lynxweb.in` and set webhook URL to  
-   `https://www.lynxweb.in/api/webhooks/cashfree` (payment success events).
-5. Apply `supabase/schema.sql` in Supabase.
+Against [goodix-fp-linux-dev/libfprint](https://github.com/goodix-fp-linux-dev/libfprint)
+commit `07306bbc` (libfprint 1.94.5 + SIGFM):
 
-## WhatsApp payment confirmations
+- Adds `04F3:3128` (X403F) and the other Elan SPI PIDs from upstream / the ASUS
+  INF, plus ACPI `ELAN7002`.
+- Treats HID PID `0x0000` as “any Elan companion” so a slightly different
+  touchpad still matches.
+- HID reset failure is a warning, not a hard error (ASUS `ResetType=GPIO`).
+- OTP / VCOM timeout 12 ms → 2 s (the Fedora X403F failure mode).
+- Longer capture timeouts; more enroll stages.
+- SIGFM matcher + Gaussian denoise; drop 2× upscale and `FPI_IMAGE_PARTIAL`
+  (those made verification useless on this class of sensor).
+- `ELANSPI_ROTATE` so rotation can be changed without rebuilding.
 
-Automatic payment receipts on WhatsApp use Meta Cloud API templates.
-See [`docs/WHATSAPP-SETUP.md`](docs/WHATSAPP-SETUP.md). Until those env vars
-are set, payments still complete and email receipts still send.
+udev binds `ELAN7001` / `ELAN7002` / `ELAN70A1` to `spidev` and raises
+`spidev.bufsiz` to 32768.
 
-## Client + admin portal
+The official ASUS Windows package (`Fingerprint_F_ELAN_Win10_64_VER45100110601`,
+INF in `vendor/windows/`) is SPI-only. There is no Linux-loadable `elanfw.bin`;
+firmware is in the sensor OTP. We do not install the Windows DLLs.
 
-Additive CRM/billing portal on the same Next.js app (shared auth, forest/gold/mono visual language).
+## Dual-boot
 
-**Project themes:** every project gets a deterministic visual skin (accent, motif, pattern) from its id/name/code/summary so lists stay scannable. Override with `projects.meta.theme` (one of `ember`, `lagoon`, `ink`, `saffron`, `verdant`, `cobalt`, `blush`, `arctic`, `voltage`, `cinder`) or `projects.meta.accent` (`#rrggbb`).
+A cold power-off after Windows is more reliable than a warm reboot. Windows
+Hello prints are not reused; enroll again on Ubuntu.
 
-1. Apply `supabase/schema.sql`, then `supabase/portal_schema.sql`, then `supabase/portal_upgrade.sql`.
-2. Enable Supabase Auth (email/password). Set:
-   - `NEXT_PUBLIC_SUPABASE_URL`
-   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-   - `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` (already used for leads/payments)
-3. Promote your user to staff in SQL after first signup:
-   `update profiles set role = 'ADMIN' where email = 'you@lynxweb.in';`
-4. Staff: `/admin` — leads (enquiries until advance paid), clients, projects, milestones, quotes, invoices, inbox.
-5. Clients: invited via `/invite/[token]`, then `/client`.
-6. Quotes: branded public letterhead at `/q/LWX-Q-…?t=…` (signed, expiring token, regenerable from the quote page). Signed-in staff and members of the owning organization can open the same page without a token. The advance is collected inline through Cashfree, which accepts the quote, raises the invoice and emails receipts.
-7. Support: clients raise tickets at `/client/support`; staff triage them at `/admin/tickets`. Both sides get email on every reply.
-8. Snapshots: staff publish them from a project page, and `/api/cron/project-digest` posts one automatically each day for every active project.
+## Uninstall
 
-Every list page (clients, projects, quotes, invoices, tickets, billing) filters
-server-side from the URL, so a search for a person's name, email, phone or a
-document number finds their records and the result stays shareable.
+```bash
+sudo ./uninstall.sh
+```
 
-Without Auth env vars, `/login` shows a configuration empty state and marketing pages keep working.
+## Credits
 
-### Email
-
-Outbound mail goes through one path that prefers Resend and falls back to any
-SMTP mailbox, records every attempt in `email_log`, and never throws — a failed
-send still leaves a copyable (and WhatsApp-shareable) link in the admin UI.
-Check delivery and send a test from `/admin/settings`.
-
-**Email setup for `@lynxweb.in` is complete** (sending via Resend, receiving via ImprovMX). See [`docs/EMAIL-SETUP.md`](docs/EMAIL-SETUP.md) for configuration details and DNS records.
-
-## Production checklist
-
-1. Apply `supabase/schema.sql`, `supabase/portal_schema.sql` and `supabase/portal_upgrade.sql`.
-2. Fill hosting env from `.env.example` (no Razorpay/Stripe vars). Include Supabase anon key for portal login.
-3. Confirm Cashfree webhook + domain whitelist.
-4. Set `RESEND_API_KEY` (or `SMTP_URL`) and verify the sending domain — see `docs/EMAIL-SETUP.md`. Confirm with the test send on `/admin/settings`.
-5. Set `CRON_SECRET` so the daily digest endpoint only answers Vercel's scheduler.
-6. Smoke-test: contact form, advance checkout, webhook mark-paid, receipt email, portal login, quote share link, ticket round-trip.
-6. Keep `CASHFREE_SECRET_KEY` and `SUPABASE_SERVICE_ROLE_KEY` server-only. Rotate any keys that were ever pasted into chat or tickets.
-
-## Scripts
-
-| Command | Description |
-| --- | --- |
-| `npm run dev` | Dev server on port 43127 |
-| `npm run build` | Production build |
-| `npm run start` | Serve production build |
-| `npm run lint` | ESLint |
-
-## Portal progress screenshots
-
-Staff upload screenshots on a project’s **What’s new** form. Files go to the Supabase Storage bucket `project-media` (public). If uploads fail in a fresh environment, run `supabase/project_media_bucket.sql` in the Supabase SQL editor.
-
-Paying a quotation advance automatically opens an active project for the client (no separate “create project” step).
+- [mincrmatt12/elan-spi-fingerprint](https://github.com/mincrmatt12/elan-spi-fingerprint) — original elanspi protocol
+- [libfprint](https://gitlab.freedesktop.org/libfprint/libfprint) — upstream driver
+- [goodix-fp-linux-dev SIGFM](https://github.com/goodix-fp-linux-dev/libfprint) — matcher that actually discriminates these strips
+- [r4nd3l/elan-3104-fingerprint-linux](https://github.com/r4nd3l/elan-3104-fingerprint-linux) — capture/matcher fixes we adapted
+- ASUS / ELAN `WbfSpiDriver.inf` 4.5.1001.10601 — ACPI IDs, GPIO reset, PID rotation hints

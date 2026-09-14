@@ -1,0 +1,3 @@
+# fprintd runs as root, but example tools and diagnostics need access too.
+KERNEL=="spidev*", MODE="0660", GROUP="plugdev"
+KERNEL=="hidraw*", ATTRS{idVendor}=="04f3", MODE="0660", GROUP="plugdev"
