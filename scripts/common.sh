@@ -125,13 +125,53 @@ install_deps() {
   fi
 }
 
+pacman_lock_holders() {
+  if have fuser; then
+    fuser /var/lib/pacman/db.lck 2>/dev/null || true
+  elif have lsof; then
+    lsof -t /var/lib/pacman/db.lck 2>/dev/null || true
+  fi
+}
+
+wait_for_pacman_lock() {
+  local i pids
+  for i in $(seq 1 45); do
+    if [[ ! -e /var/lib/pacman/db.lck ]]; then
+      return 0
+    fi
+    pids="$(pacman_lock_holders | tr -s '[:space:]' ' ' | sed 's/^ *//;s/ *$//')"
+    if [[ -z "$pids" ]]; then
+      yellow "Removing stale pacman lock (/var/lib/pacman/db.lck)"
+      rm -f /var/lib/pacman/db.lck
+      return 0
+    fi
+    yellow "pacman is busy (pid ${pids}). Close Pamac / CachyOS Hello / another pacman window. Waiting..."
+    sleep 2
+  done
+  red "pacman database is still locked."
+  echo "Close every package manager window, then either wait or run:"
+  echo "  sudo rm -f /var/lib/pacman/db.lck"
+  echo "  sudo ./install.sh"
+  exit 1
+}
+
 pacman_install_deps() {
-  pacman -Sy --needed --noconfirm \
+  wait_for_pacman_lock
+  # Avoid -Sy: it needs the db lock longer and can conflict with CachyOS Hello / Pamac.
+  if ! pacman -S --needed --noconfirm \
     git meson ninja gcc pkgconf base-devel \
     glib2 libgusb libgudev pixman nss polkit \
     opencv doctest \
     fprintd \
-    usbutils pciutils kmod
+    usbutils pciutils kmod; then
+    wait_for_pacman_lock
+    pacman -Sy --needed --noconfirm \
+      git meson ninja gcc pkgconf base-devel \
+      glib2 libgusb libgudev pixman nss polkit \
+      opencv doctest \
+      fprintd \
+      usbutils pciutils kmod
+  fi
 }
 
 apt_install_deps() {
@@ -236,6 +276,7 @@ install_system_files() {
   install -m 0644 "${ROOT}/patches/elanspi-x403f.patch" "${PREFIX}/share/x403f-fp/patches/"
   cp -a "${ROOT}/system/." "${PREFIX}/share/x403f-fp/system/"
   ln -sfn "$PREFIX/bin/x403f-fp" /usr/local/bin/x403f-fp
+  ln -sfn "$PREFIX/bin/x403f-fp" /usr/bin/x403f-fp
 
   # Ensure current kernel module picks up bufsiz without a reboot.
   if [[ -e /sys/module/spidev/parameters/bufsiz ]]; then

@@ -173,7 +173,7 @@ touchpad (usually top-right). Do not just rest a finger on it:
 
   x403f-fp enroll
 
-Then test:
+Then test (fish: use /usr/bin/x403f-fp if the short name is unknown):
 
   x403f-fp verify
 
@@ -195,7 +195,8 @@ cmd_uninstall() {
         /etc/modprobe.d/spidev-x403f.conf \
         /etc/modules-load.d/x403f-fingerprint.conf \
         /etc/systemd/system/fprintd.service.d/x403f.conf \
-        /usr/local/bin/x403f-fp
+        /usr/local/bin/x403f-fp \
+        /usr/bin/x403f-fp
   rmdir /etc/systemd/system/fprintd.service.d 2>/dev/null || true
   rm -rf "$PREFIX"
   udevadm control --reload-rules || true
