@@ -31,9 +31,30 @@ x403f-fp enroll
 x403f-fp verify
 ```
 
-Already cloned? Run `git pull` in that folder, then `sudo ./install.sh` again.
+Already cloned?
+
+```bash
+cd ~/fingerprint
+git pull
+sudo ./bin/x403f-fp prepare
+sudo ./bin/x403f-fp enroll
+```
 
 `install.sh` needs network (to fetch libfprint), a compiler, and a few minutes.
+
+### SPI buffer (`Permission denied` on bufsiz)
+
+CachyOS ships `spidev.bufsiz` as a **read-only** sysfs file. This always fails,
+even as root:
+
+```bash
+echo 32768 | sudo tee /sys/module/spidev/parameters/bufsiz
+# tee: .../bufsiz: Permission denied
+```
+
+Do not fight sysfs. `sudo ./bin/x403f-fp prepare` unbinds the Elan SPI device,
+reloads `spidev` with `bufsiz=32768`, rebinds `/dev/spidev1.0`, and restarts
+fprintd. `sudo ./bin/x403f-fp enroll` does that automatically first.
 
 KDE Plasma: **System Settings → Users → Fingerprint**.
 GNOME: **Settings → Users → Fingerprint Login**.
@@ -68,6 +89,7 @@ sudo x403f-fp rotate 3    # 90° right
 | `x403f-fp enroll [finger]` | default `right-index-finger` |
 | `x403f-fp verify` | test a match |
 | `sudo x403f-fp rotate N` | `0..3`, then re-enroll |
+| `sudo x403f-fp prepare` | reload `spidev` at 32K and restart fprintd |
 | `x403f-fp logs` | `journalctl -u fprintd` |
 | `sudo x403f-fp uninstall` | remove `/opt` driver and udev rules |
 
@@ -76,8 +98,8 @@ sudo x403f-fp rotate 3    # 90° right
 Against [goodix-fp-linux-dev/libfprint](https://github.com/goodix-fp-linux-dev/libfprint)
 commit `07306bbc` (libfprint 1.94.5 + SIGFM):
 
-- Adds `04F3:3128` (X403F) and the other Elan SPI PIDs from upstream / the ASUS
-  INF, plus ACPI `ELAN7002`.
+- Adds Elan SPI PIDs from upstream / the ASUS INF (`0x3128`, `0x30C6` on
+  X403FA, and others), plus ACPI `ELAN7002`.
 - Treats HID PID `0x0000` as “any Elan companion” so a slightly different
   touchpad still matches.
 - HID reset failure is a warning, not a hard error (ASUS `ResetType=GPIO`).

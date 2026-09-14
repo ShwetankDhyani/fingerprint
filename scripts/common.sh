@@ -74,6 +74,102 @@ spidev_nodes() {
   done
 }
 
+unbind_elanspi() {
+  local d name
+  shopt -s nullglob
+  for d in /sys/bus/spi/devices/*; do
+    name="$(basename "$d")"
+    case "$name" in
+      *ELAN7001*|*ELAN7002*|*ELAN70A1*)
+        if [[ -e "$d/driver" ]]; then
+          echo "$name" > "$d/driver/unbind" 2>/dev/null || true
+        fi
+        ;;
+    esac
+  done
+}
+
+spidev_current_bufsiz() {
+  if [[ -e /sys/module/spidev/parameters/bufsiz ]]; then
+    tr -d '[:space:]' < /sys/module/spidev/parameters/bufsiz
+  fi
+}
+
+spidev_is_builtin() {
+  [[ -d /sys/module/spidev ]] && ! grep -q '^spidev ' /proc/modules 2>/dev/null
+}
+
+persist_spidev_bufsiz() {
+  local target="${1:-32768}"
+  install -d /etc/modprobe.d
+  printf 'options spidev bufsiz=%s\n' "$target" > /etc/modprobe.d/spidev-x403f.conf
+}
+
+persist_spidev_cmdline() {
+  local target="${1:-32768}"
+  if [[ -d /etc/kernel/cmdline.d ]]; then
+    printf 'spidev.bufsiz=%s\n' "$target" > /etc/kernel/cmdline.d/spidev-bufsiz-x403f.conf
+    yellow "Wrote /etc/kernel/cmdline.d/spidev-bufsiz-x403f.conf"
+  elif [[ -f /etc/kernel/cmdline ]] && ! grep -qw "spidev.bufsiz=${target}" /etc/kernel/cmdline; then
+    local line
+    line="$(tr -d '\n' < /etc/kernel/cmdline)"
+    printf '%s spidev.bufsiz=%s\n' "$line" "$target" > /etc/kernel/cmdline
+    yellow "Added spidev.bufsiz=${target} to /etc/kernel/cmdline"
+  else
+    return 0
+  fi
+  yellow "CachyOS: sudo reinstall-kernels && sudo reboot"
+}
+
+set_spidev_bufsiz() {
+  local target=32768
+  local current=""
+  persist_spidev_bufsiz "$target"
+
+  current="$(spidev_current_bufsiz || true)"
+  if [[ "$current" == "$target" ]]; then
+    echo "spidev bufsiz already ${target}"
+    bind_spidev
+    return 0
+  fi
+
+  # CachyOS / recent kernels export bufsiz as 0444. tee/sysfs write is denied
+  # even for root. The only live fix is to unload and reload the module.
+  if [[ -n "$current" ]] && printf '%s\n' "$target" > /sys/module/spidev/parameters/bufsiz 2>/dev/null; then
+    echo "spidev bufsiz set to ${target} via sysfs"
+    bind_spidev
+    return 0
+  fi
+
+  if spidev_is_builtin; then
+    persist_spidev_cmdline "$target"
+    red "spidev is built into this kernel; bufsiz=${current} cannot change until reboot."
+    return 1
+  fi
+
+  echo "sysfs bufsiz is read-only (current=${current:-unloaded}); reloading the spidev module"
+  systemctl stop fprintd.service 2>/dev/null || systemctl stop fprintd 2>/dev/null || true
+  sleep 0.3
+  unbind_elanspi
+  if ! modprobe -r spidev 2>/dev/null; then
+    sleep 1
+    unbind_elanspi
+    if ! modprobe -r spidev; then
+      red "Cannot unload spidev (still in use). bufsiz stays ${current:-unknown}."
+      lsmod | grep -E 'spidev|spi' || true
+      return 1
+    fi
+  fi
+  modprobe spidev bufsiz="$target"
+  bind_spidev
+  current="$(spidev_current_bufsiz || true)"
+  if [[ "$current" != "$target" ]]; then
+    red "spidev bufsiz is ${current:-missing}, wanted ${target}"
+    return 1
+  fi
+  green "spidev bufsiz is now ${current}"
+}
+
 bind_spidev() {
   modprobe spidev 2>/dev/null || true
   local d name
@@ -99,9 +195,11 @@ bind_spidev() {
 
 load_spi_modules() {
   local m
-  for m in intel-lpss intel-lpss-pci spi-pxa2xx-platform spi-pxa2xx spidev hid-generic i2c-hid i2c-hid-acpi; do
+  local m
+  for m in intel-lpss intel-lpss-pci spi-pxa2xx-platform spi-pxa2xx hid-generic i2c-hid i2c-hid-acpi; do
     modprobe "$m" 2>/dev/null || true
   done
+  modprobe spidev bufsiz=32768 2>/dev/null || modprobe spidev 2>/dev/null || true
 }
 
 os_pretty() {
@@ -294,10 +392,7 @@ install_system_files() {
   ln -sfn "$PREFIX/bin/x403f-fp" /usr/local/bin/x403f-fp
   ln -sfn "$PREFIX/bin/x403f-fp" /usr/bin/x403f-fp
 
-  # Ensure current kernel module picks up bufsiz without a reboot.
-  if [[ -e /sys/module/spidev/parameters/bufsiz ]]; then
-    echo 32768 > /sys/module/spidev/parameters/bufsiz 2>/dev/null || true
-  fi
+  set_spidev_bufsiz
 }
 
 reload_services() {
