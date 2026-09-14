@@ -127,11 +127,20 @@ cmd_status() {
     sed 's/^/    /' /etc/systemd/system/fprintd.service.d/x403f.conf
   fi
   echo
-  bold "Devices fprintd can see"
+  bold "Enrolled prints"
+  local u
+  u="$(fp_session_user)"
+  echo "  listing as user ${u}"
   if have fprintd-list; then
-    fprintd-list "$USER" 2>&1 | sed 's/^/  /' || true
+    fprintd-list "$u" 2>&1 | sed 's/^/  /' || true
   else
     echo "  fprintd-list not available"
+  fi
+  echo "  on-disk store /var/lib/fprint:"
+  if [[ -d /var/lib/fprint ]]; then
+    find /var/lib/fprint -mindepth 1 2>/dev/null | sed 's/^/    /' || echo "    (empty or unreadable)"
+  else
+    echo "    (directory missing — nothing has been saved)"
   fi
 }
 
@@ -251,31 +260,58 @@ Do not press Ctrl+C.
 
 EOF
   local finger="${1:-right-index-finger}"
-  local user="${SUDO_USER:-$USER}"
-  if [[ ${EUID} -eq 0 && -n "${SUDO_USER:-}" ]]; then
-    user="$SUDO_USER"
+  local user
+  user="$(fp_session_user)"
+  echo "Enrolling ${finger} for ${user} (login only sees prints for this account)."
+  if [[ "$user" == root ]]; then
+    red "Do not enroll as root. Run this without sudo:  ./bin/x403f-fp enroll"
+    exit 1
   fi
   local rc=0
   fprintd-enroll -f "$finger" "$user" || rc=$?
+  echo
+  echo "Stored prints for ${user}:"
+  fprintd-list "$user" 2>&1 || true
   if [[ $rc -ne 0 ]]; then
     echo
     yellow "Enrollment failed. Last fprintd log lines:"
     journalctl -u fprintd -n 40 --no-pager || true
     if journalctl -u fprintd -n 80 --no-pager 2>/dev/null | grep -q 'overheating'; then
       echo
-      yellow "libfprint stopped the sensor (software thermal cutoff after ~3 minutes of continuous capture)."
-      echo "That usually means the driver never saw finger-off after the first swipe."
-      echo "Rebuild the patched driver, wait a few seconds, then enroll as your user (not sudo):"
+      yellow "libfprint stopped the sensor (software thermal cutoff)."
       echo "  cd ~/fingerprint && git pull && sudo ./install.sh"
       echo "  sudo systemctl restart fprintd"
       echo "  ./bin/x403f-fp enroll"
     fi
+    return "$rc"
   fi
-  return "$rc"
+  if fprintd-list "$user" 2>&1 | grep -q 'NoEnrolledPrints\|no fingers enrolled'; then
+    red "fprintd did not save any prints for ${user}."
+    echo "The Settings UI can show a finger as enrolled without writing storage."
+    echo "Re-run: ./bin/x403f-fp enroll    (no sudo) until it prints a finger name."
+    return 1
+  fi
+  green "Print saved. Test with: ./bin/x403f-fp verify"
+  echo "Then lock the screen and press the same corner pad. Do not reboot-test until verify-match works."
 }
 
 cmd_verify() {
-  fprintd-verify "$USER"
+  local user
+  user="$(fp_session_user)"
+  echo "Verifying as ${user}"
+  local listed
+  listed="$(fprintd-list "$user" 2>&1 || true)"
+  printf '%s\n' "$listed"
+  if printf '%s\n' "$listed" | grep -qiE 'NoEnrolledPrints|no fingers enrolled'; then
+    red "No enrolled prints for ${user} — the login screen cannot match anything."
+    echo "KDE can show a finger as enrolled without writing /var/lib/fprint."
+    echo "Enroll from this CLI as your user (no sudo):"
+    echo "  ./bin/x403f-fp enroll"
+    echo "Stop only after it lists a finger name, then run verify again."
+    exit 1
+  fi
+  echo "Press the corner pad (same as enroll), hold a second, lift."
+  fprintd-verify "$user"
 }
 
 cmd_logs() {

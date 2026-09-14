@@ -60,7 +60,10 @@ fprintd. `sudo ./bin/x403f-fp enroll` does that automatically first.
 KDE Plasma: **System Settings → Users → Fingerprint**.
 GNOME: **Settings → Users → Fingerprint Login**.
 
-Password login stays available.
+Password login stays available. Fingerprint login only works after
+`./bin/x403f-fp enroll` lists a saved finger **and** `./bin/x403f-fp verify`
+prints `verify-match`. The Settings app can show a finger as enrolled without
+writing `/var/lib/fprint`.
 
 ## Press the corner pad
 

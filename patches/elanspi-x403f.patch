@@ -1,12 +1,12 @@
 diff --git a/libfprint/drivers/elanspi.c b/libfprint/drivers/elanspi.c
-index 9338013..f6fb775 100644
+index 9338013..d2bb303 100644
 --- a/libfprint/drivers/elanspi.c
 +++ b/libfprint/drivers/elanspi.c
 @@ -80,6 +80,7 @@ struct _FpiDeviceElanSpi
  
    /* wait ctx */
    gint     finger_wait_debounce;
-+  gint64   waitup_deadline;
++  gint64   swipe_deadline;
  
    gboolean deactivating, capturing;
  
@@ -80,18 +80,7 @@ index 9338013..f6fb775 100644
    gint x1 = x, y1 = y;
  
    if (rotation == ELANSPI_180_ROTATE)
-@@ -1255,6 +1275,10 @@ elanspi_check_waitupdown_done (FpiDeviceElanSpi *self, enum elanspi_guess_result
- {
-   enum elanspi_guess_result guess = elanspi_guess_image (self, self->last_image);
- 
-+  /* Residual noise after a swipe is often UNKNOWN, not EMPTY. Counting that
-+   * as empty unblocks enroll instead of spinning until the thermal cutoff. */
-+  if (guess == ELANSPI_GUESS_UNKNOWN && target == ELANSPI_GUESS_EMPTY)
-+    guess = ELANSPI_GUESS_EMPTY;
-   if (guess == ELANSPI_GUESS_UNKNOWN)
-     return FALSE;
-   if (guess == target)
-@@ -1329,11 +1353,50 @@ elanspi_fp_assembling_get_pixel (struct fpi_frame_asmbl_ctx *ctx, struct fpi_fra
+@@ -1329,11 +1349,50 @@ elanspi_fp_assembling_get_pixel (struct fpi_frame_asmbl_ctx *ctx, struct fpi_fra
    return frame->data[y * ctx->frame_width + x];
  }
  
@@ -143,7 +132,7 @@ index 9338013..f6fb775 100644
    struct fpi_frame_asmbl_ctx assembling_ctx = {
      .image_width = (self->frame_width * 3) / 2,
  
-@@ -1348,12 +1411,15 @@ elanspi_fp_frame_stitch_and_submit (FpiDeviceElanSpi *self)
+@@ -1348,12 +1407,15 @@ elanspi_fp_frame_stitch_and_submit (FpiDeviceElanSpi *self)
  
    fpi_do_movement_estimation (&assembling_ctx, frame_start);
    img = fpi_assemble_frames (&assembling_ctx, frame_start);
@@ -162,31 +151,89 @@ index 9338013..f6fb775 100644
  
    /* clean out frame data */
    g_slist_free_full (g_steal_pointer (&self->fp_frame_list), g_free);
-@@ -1466,6 +1532,7 @@ elanspi_fp_frame_handler (FpiSsm *ssm, FpiDeviceElanSpi *self)
- finish_capture:
-   /* prepare for wait up */
-   self->finger_wait_debounce = 0;
-+  self->waitup_deadline = g_get_monotonic_time () + ELANSPI_WAITUP_TIMEOUT_USEC;
-   fpi_ssm_jump_to_state (ssm, ELANSPI_FPCAPT_WAITUP_CAPTURE);
+@@ -1387,6 +1449,24 @@ elanspi_fp_frame_handler (FpiSsm *ssm, FpiDeviceElanSpi *self)
+ {
+   g_autofree struct fpi_frame *this_frame = NULL;
+ 
++  if (self->swipe_deadline != 0 &&
++      g_get_monotonic_time () > self->swipe_deadline)
++    {
++      self->swipe_deadline = 0;
++      if (g_slist_length (self->fp_frame_list) >= ELANSPI_MIN_FRAMES_SWIPE)
++        {
++          fp_dbg ("<fp_frame> press timeout, submitting %u frames",
++                  g_slist_length (self->fp_frame_list));
++          elanspi_fp_frame_stitch_and_submit (self);
++        }
++      else
++        {
++          fp_dbg ("<fp_frame> press timeout, too few frames");
++          fpi_image_device_retry_scan (FP_IMAGE_DEVICE (self), FP_DEVICE_RETRY_TOO_SHORT);
++        }
++      goto finish_capture;
++    }
++
+   switch (elanspi_guess_image (self, self->last_image))
+     {
+     case ELANSPI_GUESS_UNKNOWN:
+@@ -1464,9 +1544,13 @@ elanspi_fp_frame_handler (FpiSsm *ssm, FpiDeviceElanSpi *self)
    return;
  
-@@ -1537,9 +1604,12 @@ elanspi_fp_capture_ssm_handler (FpiSsm *ssm, FpDevice *dev)
-     case ELANSPI_FPCAPT_WAITUP_PROCESS:
-       if (!elanspi_check_waitupdown_done (self, ELANSPI_GUESS_EMPTY))
-         {
+ finish_capture:
+-  /* prepare for wait up */
+-  self->finger_wait_debounce = 0;
+-  fpi_ssm_jump_to_state (ssm, ELANSPI_FPCAPT_WAITUP_CAPTURE);
++  /* Do not wait for EMPTY frames. On this SKU the next SPI capture often
++   * never completes, so enroll froze after the first enroll-stage-passed
++   * (libfprint will not start the next stage while finger_present is TRUE). */
++  fp_warn ("x403f-waitup-skip: swipe done, releasing finger");
++  self->capturing = FALSE;
++  fpi_image_device_report_finger_status (FP_IMAGE_DEVICE (self), FALSE);
++  fpi_ssm_mark_completed (ssm);
+   return;
+ 
+ }
+@@ -1481,6 +1565,7 @@ elanspi_fp_capture_ssm_handler (FpiSsm *ssm, FpDevice *dev)
+     {
+     case ELANSPI_FPCAPT_INIT:
+       self->finger_wait_debounce = 0;
++      self->swipe_deadline = 0;
+ 
+       fpi_ssm_next_state (ssm);
+       return;
+@@ -1525,6 +1610,7 @@ elanspi_fp_capture_ssm_handler (FpiSsm *ssm, FpDevice *dev)
+ 
+       /* report finger status */
+       fpi_image_device_report_finger_status (FP_IMAGE_DEVICE (self), TRUE);
++      self->swipe_deadline = g_get_monotonic_time () + ELANSPI_SWIPE_TIMEOUT_USEC;
+ 
+       /* jump */
+       fpi_ssm_jump_to_state (ssm, ELANSPI_FPCAPT_FP_CAPTURE);
+@@ -1533,23 +1619,6 @@ elanspi_fp_capture_ssm_handler (FpiSsm *ssm, FpDevice *dev)
+     case ELANSPI_FPCAPT_FP_PROCESS:
+       elanspi_fp_frame_handler (ssm, self);
+       return;
+-
+-    case ELANSPI_FPCAPT_WAITUP_PROCESS:
+-      if (!elanspi_check_waitupdown_done (self, ELANSPI_GUESS_EMPTY))
+-        {
 -          /* take another image */
 -          fpi_ssm_jump_to_state (ssm, ELANSPI_FPCAPT_WAITUP_CAPTURE);
 -          return;
-+          if (g_get_monotonic_time () < self->waitup_deadline)
-+            {
-+              fpi_ssm_jump_to_state (ssm, ELANSPI_FPCAPT_WAITUP_CAPTURE);
-+              return;
-+            }
-+          fp_dbg (" wait-up timed out; forcing finger-off");
-         }
+-        }
+-
+-      /* Immediately set capturing to FALSE so that when report_finger_status tries to re-start
+-       * capturing in enroll we don't hit the assert since the old SSM is about to stop. */
+-      self->capturing = FALSE;
+-      fpi_image_device_report_finger_status (FP_IMAGE_DEVICE (self), FALSE);
+-
+-      /* finish */
+-      fpi_ssm_mark_completed (ssm);
+-      return;
+     }
+ }
  
-       /* Immediately set capturing to FALSE so that when report_finger_status tries to re-start
-@@ -1699,9 +1769,16 @@ fpi_device_elanspi_class_init (FpiDeviceElanSpiClass *klass)
+@@ -1699,9 +1768,16 @@ fpi_device_elanspi_class_init (FpiDeviceElanSpiClass *klass)
    dev_class->type = FP_DEVICE_TYPE_UDEV;
    dev_class->id_table = elanspi_id_table;
    dev_class->scan_type = FP_SCAN_TYPE_SWIPE;
@@ -207,7 +254,7 @@ index 9338013..f6fb775 100644
    img_class->activate = elanspi_activate;
    img_class->deactivate = elanspi_deactivate;
 diff --git a/libfprint/drivers/elanspi.h b/libfprint/drivers/elanspi.h
-index a8d7319..f798edd 100644
+index a8d7319..55cf5a1 100644
 --- a/libfprint/drivers/elanspi.h
 +++ b/libfprint/drivers/elanspi.h
 @@ -339,7 +339,12 @@ static const struct elanspi_regtable elanspi_calibration_table_new_page1 = {
@@ -256,10 +303,12 @@ index a8d7319..f798edd 100644
 -#define ELANSPI_MIN_FRAMES_DEBOUNCE 2
 +#define ELANSPI_MIN_FRAMES_DEBOUNCE 1
  
- #define ELANSPI_SWIPE_FRAMES_DISCARD 1
+-#define ELANSPI_SWIPE_FRAMES_DISCARD 1
 -#define ELANSPI_MIN_FRAMES_SWIPE (7 + ELANSPI_SWIPE_FRAMES_DISCARD)
-+#define ELANSPI_MIN_FRAMES_SWIPE (5 + ELANSPI_SWIPE_FRAMES_DISCARD)
- #define ELANSPI_MAX_FRAMES_SWIPE (20 + ELANSPI_SWIPE_FRAMES_DISCARD)
+-#define ELANSPI_MAX_FRAMES_SWIPE (20 + ELANSPI_SWIPE_FRAMES_DISCARD)
++#define ELANSPI_SWIPE_FRAMES_DISCARD 0
++#define ELANSPI_MIN_FRAMES_SWIPE 2
++#define ELANSPI_MAX_FRAMES_SWIPE 20
  
  #define ELANSPI_MAX_FRAME_HEIGHT 43
 -#define ELANSPI_MIN_FRAME_TO_FRAME_DIFF (250 * 250)
@@ -268,9 +317,9 @@ index a8d7319..f798edd 100644
  #define ELANSPI_HV_SENSOR_FRAME_DELAY 23
  
 -#define ELANSPI_OTP_TIMEOUT_USEC (12 * 1000)
-+/* After a swipe the corner sensor often never classifies as EMPTY.
-+ * Force finger-off instead of capturing until libfprint's 180s thermal cutoff. */
-+#define ELANSPI_WAITUP_TIMEOUT_USEC (1200 * 1000)
++/* A press-and-hold on this corner pad produces few frames. Stop capturing
++ * after this many microseconds and submit whatever we have. */
++#define ELANSPI_SWIPE_TIMEOUT_USEC (2500 * 1000)
  
 -#define ELANSPI_OLD_CAPTURE_TIMEOUT_USEC (100 * 1000)
 -#define ELANSPI_HV_CAPTURE_TIMEOUT_USEC (50 * 1000)

@@ -31,6 +31,16 @@ need_root() {
 
 have() { command -v "$1" >/dev/null 2>&1; }
 
+fp_session_user() {
+  if [[ ${EUID} -eq 0 && -n "${SUDO_USER:-}" && "${SUDO_USER}" != root ]]; then
+    printf '%s\n' "$SUDO_USER"
+  elif [[ -n "${USER:-}" && "${USER}" != root ]]; then
+    printf '%s\n' "$USER"
+  else
+    id -un
+  fi
+}
+
 detect_spi_acpi() {
   local d
   shopt -s nullglob
@@ -409,6 +419,9 @@ ensure_pam_fprintd_line() {
   local file="$1"
   [[ -f "$file" ]] || return 0
   if grep -q 'pam_fprintd\.so' "$file"; then
+    if ! grep -q 'pam_fprintd\.so.*timeout=' "$file"; then
+      sed -i -E 's/(pam_fprintd\.so)(.*)/\1 timeout=60 maxtries=3\2/' "$file"
+    fi
     return 0
   fi
   cp -a "$file" "${file}.x403f.bak"
@@ -417,7 +430,7 @@ ensure_pam_fprintd_line() {
   awk '
     BEGIN { done = 0 }
     /^auth[ \t]/ && !done {
-      print "auth      sufficient      pam_fprintd.so"
+      print "auth      sufficient      pam_fprintd.so timeout=60 maxtries=3"
       done = 1
     }
     { print }
@@ -429,14 +442,15 @@ ensure_pam_fprintd_line() {
 enable_pam() {
   if have pam-auth-update; then
     pam-auth-update --enable fprintd --package || true
-    return
   fi
   # Arch / CachyOS: do not touch system-auth (too broad). Local login +
   # display manager only, password still works because pam_unix stays.
-  ensure_pam_fprintd_line /etc/pam.d/system-local-login
-  ensure_pam_fprintd_line /etc/pam.d/sddm
-  ensure_pam_fprintd_line /etc/pam.d/gdm-password
-  ensure_pam_fprintd_line /etc/pam.d/kde
+  local f
+  for f in /etc/pam.d/system-local-login /etc/pam.d/sddm /etc/pam.d/sddm-greeter \
+           /etc/pam.d/gdm-password /etc/pam.d/gdm-fingerprint /etc/pam.d/kde \
+           /etc/pam.d/kde-fingerprint /etc/pam.d/plasma /etc/pam.d/login; do
+    ensure_pam_fprintd_line "$f"
+  done
 }
 
 set_rotation() {
