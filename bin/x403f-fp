@@ -23,7 +23,7 @@ Usage:
   sudo x403f-fp uninstall   Remove the patched driver and restore distro files
        x403f-fp probe       Show what the kernel can see (no root required)
        x403f-fp status      Driver, spidev, fprintd, enrolled prints
-       x403f-fp enroll      Enroll a finger (swipe, do not just press)
+       x403f-fp enroll      Enroll a finger (press the corner pad, then lift)
        x403f-fp verify      Test a match
   sudo x403f-fp rotate N    0=none 1=90°left 2=180° 3=90°right (then re-enroll)
   sudo x403f-fp prepare     Reload spidev with a 32K buffer and restart fprintd
@@ -172,8 +172,8 @@ cmd_install() {
   green "Install finished."
   cat <<'EOF'
 
-Enroll a finger. This sensor is a SWIPE reader sitting in the corner of the
-touchpad (usually top-right). Do not just rest a finger on it:
+Enroll a finger. The pad is in a corner of the touchpad (usually top-right).
+On this ASUS SKU a firm press-and-lift works; a long swipe often does not.
 
   sudo ./bin/x403f-fp prepare
   ./bin/x403f-fp enroll
@@ -244,12 +244,10 @@ cmd_enroll() {
   cat <<'EOF'
 Close System Settings / any other fingerprint window first.
 
-Swipe slowly across the sensor in the CORNER of the touchpad (usually top-right).
-You need 8 swipes. After each "enroll-stage-passed":
-  1. lift your finger fully off for a second
-  2. swipe again slowly
-If nothing prints after a swipe, lift and swipe again — do not wait minutes.
-Do not press Ctrl+C. Wait for enroll-completed.
+The pad is in a CORNER of the touchpad (usually top-right), same place as Windows.
+Press firmly, hold about a second, then lift fully off. Repeat until enroll-completed
+(about 8 times). A long swipe across the touchpad often never completes a stage.
+Do not press Ctrl+C.
 
 EOF
   local finger="${1:-right-index-finger}"

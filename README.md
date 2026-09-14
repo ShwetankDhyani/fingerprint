@@ -62,11 +62,12 @@ GNOME: **Settings → Users → Fingerprint Login**.
 
 Password login stays available.
 
-## Swipe, don’t press
+## Press the corner pad
 
-The Linux driver is a **swipe** driver. The sensor is the small pad in a corner
-of the touchpad (usually top-right). Swipe slowly across it. A static press
-times out (`enroll-unknown-error` / `timed out waiting for image`).
+On Windows this reader is a tap/press sensor. The Linux driver still talks to
+it as a strip, but on the X403FA a **firm press** on the corner pad (usually
+top-right of the touchpad), hold about a second, then lift, is what completes
+a stage. A long swipe across the touchpad often stalls after the first pass.
 
 Close **System Settings → Users → Fingerprint** while using the CLI. Two
 clients claiming the reader at once produces `Device was already claimed`
