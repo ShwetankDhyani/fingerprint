@@ -48,7 +48,13 @@ require_live_driver() {
     red "Patched libfprint is missing. Run: sudo ./install.sh"
     exit 1
   fi
-  # Do not use `strings` — it is often missing. grep -a reads the .so directly.
+  if grep -aF -q 'swreset, then waiting for press' "$so" 2>/dev/null; then
+    red "fprintd is still using the broken reset build."
+    echo "Restarting fprintd is not enough. Rebuild:"
+    echo "  cd ~/fingerprint && git pull && sudo ./install.sh"
+    echo "Wait until it prints 'Install finished', then enroll."
+    exit 1
+  fi
   if grep -aF -q 'x403f-waitup-skip' "$so" 2>/dev/null || [[ -f "$marker" ]]; then
     return 0
   fi
