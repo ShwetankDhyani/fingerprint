@@ -1,16 +1,18 @@
 diff --git a/libfprint/drivers/elanspi.c b/libfprint/drivers/elanspi.c
-index 9338013..62dcfbb 100644
+index 9338013..c563341 100644
 --- a/libfprint/drivers/elanspi.c
 +++ b/libfprint/drivers/elanspi.c
-@@ -80,6 +80,7 @@ struct _FpiDeviceElanSpi
+@@ -80,6 +80,9 @@ struct _FpiDeviceElanSpi
  
    /* wait ctx */
    gint     finger_wait_debounce;
 +  gint64   swipe_deadline;
++  gint64   waitup_deadline;
++  gint     capture_kind;
  
    gboolean deactivating, capturing;
  
-@@ -97,15 +98,23 @@ elanspi_do_hwreset (FpiDeviceElanSpi *self, GError **err)
+@@ -97,15 +100,23 @@ elanspi_do_hwreset (FpiDeviceElanSpi *self, GError **err)
    if (g_strcmp0 (g_getenv ("FP_DEVICE_EMULATION"), "1") == 0)
      return;
  
@@ -39,7 +41,7 @@ index 9338013..62dcfbb 100644
        return;
      }
  
-@@ -114,12 +123,8 @@ elanspi_do_hwreset (FpiDeviceElanSpi *self, GError **err)
+@@ -114,12 +125,8 @@ elanspi_do_hwreset (FpiDeviceElanSpi *self, GError **err)
    };
  
    if (ioctl (fd, HIDIOCSFEATURE (5), &buf) != 5)
@@ -53,7 +55,62 @@ index 9338013..62dcfbb 100644
    close (fd);
  }
  
-@@ -1171,10 +1176,25 @@ elanspi_correct_with_bg (FpiDeviceElanSpi *self, guint16 *raw_image)
+@@ -234,6 +241,12 @@ enum elanspi_fp_capture_state {
+   ELANSPI_FPCAPT_NSTATES
+ };
+ 
++enum elanspi_capture_kind {
++  ELANSPI_KIND_WAITDOWN = 0,
++  ELANSPI_KIND_FINGER,
++  ELANSPI_KIND_WAITUP,
++};
++
+ /* helpers */
+ 
+ static FpiSpiTransfer *
+@@ -457,6 +470,21 @@ elanspi_capture_old_line_handler (FpiSpiTransfer *transfer, FpDevice *dev, gpoin
+     }
+ }
+ 
++static void
++elanspi_handle_line_timeout (FpiSsm *ssm, FpiDeviceElanSpi *self)
++{
++  fp_warn ("x403f-waitup: line timeout kind=%d", self->capture_kind);
++  if (self->capture_kind == ELANSPI_KIND_WAITUP)
++    {
++      /* Drain finished (or sensor went quiet). Parent will release finger. */
++      fpi_ssm_mark_completed (ssm);
++      return;
++    }
++  /* Re-issue 0x01 instead of failing the enroll session. WRITE_CAPTURE is 0
++   * for both the old-line and HV capture SSMs. */
++  fpi_ssm_jump_to_state (ssm, 0);
++}
++
+ static void
+ elanspi_capture_old_handler (FpiSsm *ssm, FpDevice *dev)
+ {
+@@ -487,8 +515,7 @@ elanspi_capture_old_handler (FpiSsm *ssm, FpDevice *dev)
+           /* has the timeout expired? -- disabled in testing since valgrind is very slow */
+           if (g_get_monotonic_time () > self->capture_timeout && g_strcmp0 (g_getenv ("FP_DEVICE_EMULATION"), "1") != 0)
+             {
+-              /* end with a timeout */
+-              fpi_ssm_mark_failed (ssm, g_error_new (G_IO_ERROR, G_IO_ERROR_TIMED_OUT, "timed out waiting for new line"));
++              elanspi_handle_line_timeout (ssm, self);
+               return;
+             }
+           /* check again */
+@@ -765,8 +792,7 @@ elanspi_capture_hv_handler (FpiSsm *ssm, FpDevice *dev)
+           /* has the timeout expired? */
+           if (g_get_monotonic_time () > self->capture_timeout)
+             {
+-              /* end with a timeout */
+-              fpi_ssm_mark_failed (ssm, g_error_new (G_IO_ERROR, G_IO_ERROR_TIMED_OUT, "timed out waiting for image"));
++              elanspi_handle_line_timeout (ssm, self);
+               return;
+             }
+           /* check again */
+@@ -1171,10 +1197,25 @@ elanspi_correct_with_bg (FpiDeviceElanSpi *self, guint16 *raw_image)
    return count;
  }
  
@@ -80,7 +137,7 @@ index 9338013..62dcfbb 100644
    gint x1 = x, y1 = y;
  
    if (rotation == ELANSPI_180_ROTATE)
-@@ -1329,11 +1349,50 @@ elanspi_fp_assembling_get_pixel (struct fpi_frame_asmbl_ctx *ctx, struct fpi_fra
+@@ -1329,11 +1370,50 @@ elanspi_fp_assembling_get_pixel (struct fpi_frame_asmbl_ctx *ctx, struct fpi_fra
    return frame->data[y * ctx->frame_width + x];
  }
  
@@ -132,7 +189,7 @@ index 9338013..62dcfbb 100644
    struct fpi_frame_asmbl_ctx assembling_ctx = {
      .image_width = (self->frame_width * 3) / 2,
  
-@@ -1348,12 +1407,15 @@ elanspi_fp_frame_stitch_and_submit (FpiDeviceElanSpi *self)
+@@ -1348,12 +1428,15 @@ elanspi_fp_frame_stitch_and_submit (FpiDeviceElanSpi *self)
  
    fpi_do_movement_estimation (&assembling_ctx, frame_start);
    img = fpi_assemble_frames (&assembling_ctx, frame_start);
@@ -151,7 +208,7 @@ index 9338013..62dcfbb 100644
  
    /* clean out frame data */
    g_slist_free_full (g_steal_pointer (&self->fp_frame_list), g_free);
-@@ -1387,6 +1449,24 @@ elanspi_fp_frame_handler (FpiSsm *ssm, FpiDeviceElanSpi *self)
+@@ -1387,6 +1470,24 @@ elanspi_fp_frame_handler (FpiSsm *ssm, FpiDeviceElanSpi *self)
  {
    g_autofree struct fpi_frame *this_frame = NULL;
  
@@ -176,34 +233,77 @@ index 9338013..62dcfbb 100644
    switch (elanspi_guess_image (self, self->last_image))
      {
      case ELANSPI_GUESS_UNKNOWN:
-@@ -1464,9 +1544,13 @@ elanspi_fp_frame_handler (FpiSsm *ssm, FpiDeviceElanSpi *self)
+@@ -1464,8 +1565,11 @@ elanspi_fp_frame_handler (FpiSsm *ssm, FpiDeviceElanSpi *self)
    return;
  
  finish_capture:
 -  /* prepare for wait up */
--  self->finger_wait_debounce = 0;
--  fpi_ssm_jump_to_state (ssm, ELANSPI_FPCAPT_WAITUP_CAPTURE);
-+  /* Do not wait for EMPTY frames. On this SKU the next SPI capture often
-+   * never completes, so enroll froze after the first enroll-stage-passed
-+   * (libfprint will not start the next stage while finger_present is TRUE). */
-+  fp_warn ("x403f-waitup-skip: swipe done, releasing finger");
-+  self->capturing = FALSE;
-+  fpi_image_device_report_finger_status (FP_IMAGE_DEVICE (self), FALSE);
-+  fpi_ssm_mark_completed (ssm);
++  /* Drain leftover SPI lines. Skipping wait-up left the sensor mid-frame,
++   * so the next wait-down never saw a press after enroll-stage-passed. */
+   self->finger_wait_debounce = 0;
++  self->waitup_deadline = g_get_monotonic_time () + ELANSPI_WAITUP_TIMEOUT_USEC;
++  fp_warn ("x403f-waitup: draining after press");
+   fpi_ssm_jump_to_state (ssm, ELANSPI_FPCAPT_WAITUP_CAPTURE);
    return;
  
- }
-@@ -1481,7 +1565,8 @@ elanspi_fp_capture_ssm_handler (FpiSsm *ssm, FpDevice *dev)
+@@ -1481,7 +1585,10 @@ elanspi_fp_capture_ssm_handler (FpiSsm *ssm, FpDevice *dev)
      {
      case ELANSPI_FPCAPT_INIT:
        self->finger_wait_debounce = 0;
 -
 +      self->swipe_deadline = 0;
-+      fp_warn ("x403f-waitup-skip: waiting for press");
++      self->waitup_deadline = 0;
++      self->capture_kind = ELANSPI_KIND_WAITDOWN;
++      fp_warn ("x403f-waitup: waiting for press");
        fpi_ssm_next_state (ssm);
        return;
  
-@@ -1525,6 +1610,7 @@ elanspi_fp_capture_ssm_handler (FpiSsm *ssm, FpDevice *dev)
+@@ -1501,6 +1608,44 @@ elanspi_fp_capture_ssm_handler (FpiSsm *ssm, FpDevice *dev)
+ 
+           return;
+         }
++      switch (fpi_ssm_get_cur_state (ssm))
++        {
++        case ELANSPI_FPCAPT_WAITDOWN_CAPTURE:
++          self->capture_kind = ELANSPI_KIND_WAITDOWN;
++          break;
++        case ELANSPI_FPCAPT_WAITUP_CAPTURE:
++          self->capture_kind = ELANSPI_KIND_WAITUP;
++          if (self->waitup_deadline != 0 &&
++              g_get_monotonic_time () > self->waitup_deadline)
++            {
++              fp_warn ("x403f-waitup: drain timeout, releasing finger");
++              self->capturing = FALSE;
++              self->waitup_deadline = 0;
++              fpi_image_device_report_finger_status (FP_IMAGE_DEVICE (self), FALSE);
++              fpi_ssm_mark_completed (ssm);
++              return;
++            }
++          break;
++        case ELANSPI_FPCAPT_FP_CAPTURE:
++          self->capture_kind = ELANSPI_KIND_FINGER;
++          if (self->swipe_deadline != 0 &&
++              g_get_monotonic_time () > self->swipe_deadline)
++            {
++              self->swipe_deadline = 0;
++              if (g_slist_length (self->fp_frame_list) >= ELANSPI_MIN_FRAMES_SWIPE)
++                elanspi_fp_frame_stitch_and_submit (self);
++              else
++                fpi_image_device_retry_scan (FP_IMAGE_DEVICE (self), FP_DEVICE_RETRY_TOO_SHORT);
++              self->finger_wait_debounce = 0;
++              self->waitup_deadline = g_get_monotonic_time () + ELANSPI_WAITUP_TIMEOUT_USEC;
++              fp_warn ("x403f-waitup: draining after press");
++              fpi_ssm_jump_to_state (ssm, ELANSPI_FPCAPT_WAITUP_CAPTURE);
++              return;
++            }
++          break;
++        default:
++          break;
++        }
+       /* if sensor is hv */
+       if (self->sensor_id == 0xe)
+         chld = fpi_ssm_new (dev, elanspi_capture_hv_handler, ELANSPI_CAPTHV_NSTATES);
+@@ -1525,6 +1670,7 @@ elanspi_fp_capture_ssm_handler (FpiSsm *ssm, FpDevice *dev)
  
        /* report finger status */
        fpi_image_device_report_finger_status (FP_IMAGE_DEVICE (self), TRUE);
@@ -211,45 +311,71 @@ index 9338013..62dcfbb 100644
  
        /* jump */
        fpi_ssm_jump_to_state (ssm, ELANSPI_FPCAPT_FP_CAPTURE);
-@@ -1533,23 +1619,6 @@ elanspi_fp_capture_ssm_handler (FpiSsm *ssm, FpDevice *dev)
-     case ELANSPI_FPCAPT_FP_PROCESS:
-       elanspi_fp_frame_handler (ssm, self);
+@@ -1535,19 +1681,25 @@ elanspi_fp_capture_ssm_handler (FpiSsm *ssm, FpDevice *dev)
        return;
--
--    case ELANSPI_FPCAPT_WAITUP_PROCESS:
--      if (!elanspi_check_waitupdown_done (self, ELANSPI_GUESS_EMPTY))
--        {
+ 
+     case ELANSPI_FPCAPT_WAITUP_PROCESS:
++      if (self->waitup_deadline != 0 &&
++          g_get_monotonic_time () > self->waitup_deadline)
++        {
++          fp_warn ("x403f-waitup: drain timeout, releasing finger");
++          self->capturing = FALSE;
++          self->waitup_deadline = 0;
++          fpi_image_device_report_finger_status (FP_IMAGE_DEVICE (self), FALSE);
++          fpi_ssm_mark_completed (ssm);
++          return;
++        }
+       if (!elanspi_check_waitupdown_done (self, ELANSPI_GUESS_EMPTY))
+         {
 -          /* take another image */
--          fpi_ssm_jump_to_state (ssm, ELANSPI_FPCAPT_WAITUP_CAPTURE);
--          return;
--        }
+           fpi_ssm_jump_to_state (ssm, ELANSPI_FPCAPT_WAITUP_CAPTURE);
+           return;
+         }
 -
 -      /* Immediately set capturing to FALSE so that when report_finger_status tries to re-start
 -       * capturing in enroll we don't hit the assert since the old SSM is about to stop. */
--      self->capturing = FALSE;
--      fpi_image_device_report_finger_status (FP_IMAGE_DEVICE (self), FALSE);
++      fp_warn ("x403f-waitup: finger lifted");
+       self->capturing = FALSE;
++      self->waitup_deadline = 0;
+       fpi_image_device_report_finger_status (FP_IMAGE_DEVICE (self), FALSE);
 -
 -      /* finish */
--      fpi_ssm_mark_completed (ssm);
--      return;
+       fpi_ssm_mark_completed (ssm);
+       return;
      }
- }
- 
-@@ -1639,9 +1708,19 @@ elanspi_fp_capture_finish (FpiSsm *ssm, FpDevice *dev, GError *error)
+@@ -1639,9 +1791,37 @@ elanspi_fp_capture_finish (FpiSsm *ssm, FpDevice *dev, GError *error)
        return;
      }
  
 -  /* if there was an error, report it */
-+  /* A timed-out line wait is common after a press; retry the scan instead
-+   * of aborting the whole enroll with enroll-unknown-error. */
    if (error)
 -    fpi_image_device_session_error (idev, error);
 +    {
 +      if (g_error_matches (error, G_IO_ERROR, G_IO_ERROR_TIMED_OUT))
 +        {
-+          fp_warn ("x403f-waitup-skip: capture timed out, retry");
++          gint kind = self->capture_kind;
++          fp_warn ("x403f-waitup: capture SSM timeout kind=%d", kind);
 +          g_error_free (error);
-+          fpi_image_device_retry_scan (idev, FP_DEVICE_RETRY_GENERAL);
++          if (kind == ELANSPI_KIND_FINGER)
++            {
++              /* Valid from CAPTURE: ask for another press. */
++              fpi_image_device_retry_scan (idev, FP_DEVICE_RETRY_GENERAL);
++              fpi_image_device_report_finger_status (idev, FALSE);
++              return;
++            }
++          if (kind == ELANSPI_KIND_WAITUP)
++            {
++              /* Finger-off lets enroll start the next AWAIT_FINGER_ON. */
++              fpi_image_device_report_finger_status (idev, FALSE);
++              return;
++            }
++          /* Wait-down is still AWAIT_FINGER_ON. retry_scan is not a legal
++           * transition from that state and froze enroll after stage 1. */
++          self->capturing = TRUE;
++          fpi_ssm_start (fpi_ssm_new (dev,
++                                      elanspi_fp_capture_ssm_handler,
++                                      ELANSPI_FPCAPT_NSTATES),
++                         elanspi_fp_capture_finish);
 +          return;
 +        }
 +      fpi_image_device_session_error (idev, error);
@@ -257,7 +383,7 @@ index 9338013..62dcfbb 100644
  }
  
  static void
-@@ -1699,9 +1778,16 @@ fpi_device_elanspi_class_init (FpiDeviceElanSpiClass *klass)
+@@ -1699,9 +1879,16 @@ fpi_device_elanspi_class_init (FpiDeviceElanSpiClass *klass)
    dev_class->type = FP_DEVICE_TYPE_UDEV;
    dev_class->id_table = elanspi_id_table;
    dev_class->scan_type = FP_SCAN_TYPE_SWIPE;
@@ -278,7 +404,7 @@ index 9338013..62dcfbb 100644
    img_class->activate = elanspi_activate;
    img_class->deactivate = elanspi_deactivate;
 diff --git a/libfprint/drivers/elanspi.h b/libfprint/drivers/elanspi.h
-index a8d7319..b1c82b9 100644
+index a8d7319..8440c8a 100644
 --- a/libfprint/drivers/elanspi.h
 +++ b/libfprint/drivers/elanspi.h
 @@ -339,7 +339,12 @@ static const struct elanspi_regtable elanspi_calibration_table_new_page1 = {
@@ -311,7 +437,7 @@ index a8d7319..b1c82b9 100644
    {.udev_types = 0}
  };
  
-@@ -359,24 +374,28 @@ static const FpIdEntry elanspi_id_table[] = {
+@@ -359,24 +374,31 @@ static const FpIdEntry elanspi_id_table[] = {
  
  #define ELANSPI_HV_CALIBRATION_TARGET_MEAN 3000
  
@@ -344,6 +470,9 @@ index a8d7319..b1c82b9 100644
 +/* A press-and-hold on this corner pad produces few frames. Stop capturing
 + * after this many microseconds and submit whatever we have. */
 +#define ELANSPI_SWIPE_TIMEOUT_USEC (2500 * 1000)
++/* Drain leftover SPI lines after a press, then force finger-off. Skipping
++ * wait-up left the sensor mid-frame so stage 2 never saw a press. */
++#define ELANSPI_WAITUP_TIMEOUT_USEC (800 * 1000)
  
 -#define ELANSPI_OLD_CAPTURE_TIMEOUT_USEC (100 * 1000)
 -#define ELANSPI_HV_CAPTURE_TIMEOUT_USEC (50 * 1000)

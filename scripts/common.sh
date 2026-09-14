@@ -48,14 +48,17 @@ require_live_driver() {
     red "Patched libfprint is missing. Run: sudo ./install.sh"
     exit 1
   fi
-  if grep -aF -q 'swreset, then waiting for press' "$so" 2>/dev/null; then
-    red "fprintd is still using the broken reset build."
+  if grep -aF -q 'swreset, then waiting for press' "$so" 2>/dev/null \
+     || grep -aF -q 'swipe done, releasing finger' "$so" 2>/dev/null; then
+    red "fprintd is still using a build that freezes after the first enroll stage."
     echo "Restarting fprintd is not enough. Rebuild:"
-    echo "  cd ~/fingerprint && git pull && sudo ./install.sh"
-    echo "Wait until it prints 'Install finished', then enroll."
+    echo "  cd ~/fingerprint && git pull && sudo ./install.sh && ./bin/x403f-fp enroll"
+    echo "Wait until it prints 'Install finished', then enroll starts."
     exit 1
   fi
-  if grep -aF -q 'x403f-waitup-skip' "$so" 2>/dev/null || [[ -f "$marker" ]]; then
+  if grep -aF -q 'x403f-waitup: draining after press' "$so" 2>/dev/null \
+     || grep -aF -q 'x403f-waitup: waiting for press' "$so" 2>/dev/null \
+     || [[ -f "$marker" ]]; then
     return 0
   fi
   yellow "Could not find driver marker in ${so}; enroll will still try."
@@ -431,7 +434,7 @@ install_system_files() {
   cp -a "${ROOT}/system/." "${PREFIX}/share/x403f-fp/system/"
   ln -sfn "$PREFIX/bin/x403f-fp" /usr/local/bin/x403f-fp
   ln -sfn "$PREFIX/bin/x403f-fp" /usr/bin/x403f-fp
-  printf 'x403f-waitup-skip\n' > "${PREFIX}/share/x403f-fp/DRIVER_MARKER"
+  printf 'x403f-waitup-drain\n' > "${PREFIX}/share/x403f-fp/DRIVER_MARKER"
 
   set_spidev_bufsiz
 }

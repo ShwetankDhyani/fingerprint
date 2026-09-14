@@ -27,6 +27,7 @@ if [[ "${1:-}" == "--apply" ]]; then
   grep -q 'FPI_DEVICE_ALGO_SIGFM' "$tmp/libfprint/drivers/elanspi.c"
   grep -q 'entry->hid_id.pid == 0' "$tmp/libfprint/fp-context.c"
   grep -q "dependency('opencv5'" "$tmp/libfprint/sigfm/meson.build"
+  grep -q 'x403f-waitup: draining after press' "$tmp/libfprint/drivers/elanspi.c"
   echo "patch applies on pinned libfprint commit"
   rm -rf "$tmp"
 fi

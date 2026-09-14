@@ -257,8 +257,9 @@ Close System Settings / any other fingerprint window first.
 The pad is in a CORNER of the touchpad (usually top-right).
 After each "enroll-stage-passed":
   1. take your finger COMPLETELY off the touchpad
-  2. wait two seconds (matching can take a few seconds of CPU)
+  2. wait one second
   3. press the corner again, hold one second, lift
+You need several stages (it will print enroll-stage-passed each time).
 If it says enroll-retry-scan, that is OK — press again.
 Do not press Ctrl+C.
 

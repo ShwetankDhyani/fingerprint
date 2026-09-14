@@ -132,8 +132,9 @@ commit `07306bbc` (libfprint 1.94.5 + SIGFM):
 - HID reset failure is a warning, not a hard error (ASUS `ResetType=GPIO`).
 - OTP / VCOM timeout 12 ms → 2 s (the Fedora X403F failure mode).
 - Longer capture timeouts; 8 enroll stages.
-- After a swipe, wait at most 1.2 s for “finger off” (this SKU often never
-  classifies as empty; the old wait spun until the 180 s thermal cutoff).
+- After a swipe, drain leftover SPI lines for up to 0.8 s, then force
+  finger-off so the next enroll stage can start. Skipping wait-up left
+  the sensor mid-frame and froze enroll after the first stage.
 - Treat UNKNOWN frames as empty during wait-up; looser empty/movement thresholds.
 - Disable the software thermal model (`temp_hot_seconds = -1`).
 - SIGFM matcher + Gaussian denoise; drop 2× upscale and `FPI_IMAGE_PARTIAL`
