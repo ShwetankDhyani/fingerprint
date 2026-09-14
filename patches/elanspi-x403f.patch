@@ -1,5 +1,5 @@
 diff --git a/libfprint/drivers/elanspi.c b/libfprint/drivers/elanspi.c
-index 9338013..d2bb303 100644
+index 9338013..714d770 100644
 --- a/libfprint/drivers/elanspi.c
 +++ b/libfprint/drivers/elanspi.c
 @@ -80,6 +80,7 @@ struct _FpiDeviceElanSpi
@@ -53,7 +53,15 @@ index 9338013..d2bb303 100644
    close (fd);
  }
  
-@@ -1171,10 +1176,25 @@ elanspi_correct_with_bg (FpiDeviceElanSpi *self, guint16 *raw_image)
+@@ -222,6 +227,7 @@ enum elanspi_write_regtable_state {
+ 
+ enum elanspi_fp_capture_state {
+   ELANSPI_FPCAPT_INIT,
++  ELANSPI_FPCAPT_RESET_DELAY,
+   /* wait for finger */
+   ELANSPI_FPCAPT_WAITDOWN_CAPTURE,
+   ELANSPI_FPCAPT_WAITDOWN_PROCESS,
+@@ -1171,10 +1177,25 @@ elanspi_correct_with_bg (FpiDeviceElanSpi *self, guint16 *raw_image)
    return count;
  }
  
@@ -80,7 +88,7 @@ index 9338013..d2bb303 100644
    gint x1 = x, y1 = y;
  
    if (rotation == ELANSPI_180_ROTATE)
-@@ -1329,11 +1349,50 @@ elanspi_fp_assembling_get_pixel (struct fpi_frame_asmbl_ctx *ctx, struct fpi_fra
+@@ -1329,11 +1350,50 @@ elanspi_fp_assembling_get_pixel (struct fpi_frame_asmbl_ctx *ctx, struct fpi_fra
    return frame->data[y * ctx->frame_width + x];
  }
  
@@ -132,7 +140,7 @@ index 9338013..d2bb303 100644
    struct fpi_frame_asmbl_ctx assembling_ctx = {
      .image_width = (self->frame_width * 3) / 2,
  
-@@ -1348,12 +1407,15 @@ elanspi_fp_frame_stitch_and_submit (FpiDeviceElanSpi *self)
+@@ -1348,12 +1408,15 @@ elanspi_fp_frame_stitch_and_submit (FpiDeviceElanSpi *self)
  
    fpi_do_movement_estimation (&assembling_ctx, frame_start);
    img = fpi_assemble_frames (&assembling_ctx, frame_start);
@@ -151,7 +159,7 @@ index 9338013..d2bb303 100644
  
    /* clean out frame data */
    g_slist_free_full (g_steal_pointer (&self->fp_frame_list), g_free);
-@@ -1387,6 +1449,24 @@ elanspi_fp_frame_handler (FpiSsm *ssm, FpiDeviceElanSpi *self)
+@@ -1387,6 +1450,24 @@ elanspi_fp_frame_handler (FpiSsm *ssm, FpiDeviceElanSpi *self)
  {
    g_autofree struct fpi_frame *this_frame = NULL;
  
@@ -176,7 +184,7 @@ index 9338013..d2bb303 100644
    switch (elanspi_guess_image (self, self->last_image))
      {
      case ELANSPI_GUESS_UNKNOWN:
-@@ -1464,9 +1544,13 @@ elanspi_fp_frame_handler (FpiSsm *ssm, FpiDeviceElanSpi *self)
+@@ -1464,9 +1545,13 @@ elanspi_fp_frame_handler (FpiSsm *ssm, FpiDeviceElanSpi *self)
    return;
  
  finish_capture:
@@ -193,15 +201,32 @@ index 9338013..d2bb303 100644
    return;
  
  }
-@@ -1481,6 +1565,7 @@ elanspi_fp_capture_ssm_handler (FpiSsm *ssm, FpDevice *dev)
+@@ -1476,13 +1561,23 @@ elanspi_fp_capture_ssm_handler (FpiSsm *ssm, FpDevice *dev)
+ {
+   FpiDeviceElanSpi *self = FPI_DEVICE_ELANSPI (dev);
+   FpiSsm *chld = NULL;
++  FpiSpiTransfer *xfer = NULL;
+ 
+   switch (fpi_ssm_get_cur_state (ssm))
      {
      case ELANSPI_FPCAPT_INIT:
        self->finger_wait_debounce = 0;
 +      self->swipe_deadline = 0;
++      /* Abort a leftover capture so the next press is not a hung SPI ioctl. */
++      fp_warn ("x403f-waitup-skip: swreset, then waiting for press");
++      xfer = elanspi_do_swreset (self);
++      xfer->ssm = ssm;
++      fpi_spi_transfer_submit (xfer, fpi_device_get_cancellable (dev),
++                               fpi_ssm_spi_transfer_cb, NULL);
++      return;
  
-       fpi_ssm_next_state (ssm);
+-      fpi_ssm_next_state (ssm);
++    case ELANSPI_FPCAPT_RESET_DELAY:
++      fpi_ssm_next_state_delayed (ssm, 20);
        return;
-@@ -1525,6 +1610,7 @@ elanspi_fp_capture_ssm_handler (FpiSsm *ssm, FpDevice *dev)
+ 
+     case ELANSPI_FPCAPT_WAITDOWN_CAPTURE:
+@@ -1525,6 +1620,7 @@ elanspi_fp_capture_ssm_handler (FpiSsm *ssm, FpDevice *dev)
  
        /* report finger status */
        fpi_image_device_report_finger_status (FP_IMAGE_DEVICE (self), TRUE);
@@ -209,7 +234,7 @@ index 9338013..d2bb303 100644
  
        /* jump */
        fpi_ssm_jump_to_state (ssm, ELANSPI_FPCAPT_FP_CAPTURE);
-@@ -1533,23 +1619,6 @@ elanspi_fp_capture_ssm_handler (FpiSsm *ssm, FpDevice *dev)
+@@ -1533,23 +1629,6 @@ elanspi_fp_capture_ssm_handler (FpiSsm *ssm, FpDevice *dev)
      case ELANSPI_FPCAPT_FP_PROCESS:
        elanspi_fp_frame_handler (ssm, self);
        return;
@@ -233,7 +258,7 @@ index 9338013..d2bb303 100644
      }
  }
  
-@@ -1699,9 +1768,16 @@ fpi_device_elanspi_class_init (FpiDeviceElanSpiClass *klass)
+@@ -1699,9 +1778,16 @@ fpi_device_elanspi_class_init (FpiDeviceElanSpiClass *klass)
    dev_class->type = FP_DEVICE_TYPE_UDEV;
    dev_class->id_table = elanspi_id_table;
    dev_class->scan_type = FP_SCAN_TYPE_SWIPE;

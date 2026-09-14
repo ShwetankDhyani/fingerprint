@@ -241,6 +241,7 @@ cmd_enroll() {
     red "fprintd is not installed. Run: sudo ./bin/x403f-fp install"
     exit 1
   fi
+  require_live_driver
   if [[ ${EUID} -eq 0 ]]; then
     local bufsiz
     bufsiz="$(spidev_current_bufsiz || true)"
@@ -253,10 +254,12 @@ cmd_enroll() {
   cat <<'EOF'
 Close System Settings / any other fingerprint window first.
 
-The pad is in a CORNER of the touchpad (usually top-right), same place as Windows.
-Press firmly, hold about a second, then lift fully off. Repeat until enroll-completed
-(about 8 times). A long swipe across the touchpad often never completes a stage.
-Do not press Ctrl+C.
+The pad is in a CORNER of the touchpad (usually top-right).
+After each "enroll-stage-passed":
+  1. take your finger COMPLETELY off the touchpad
+  2. wait two seconds
+  3. press the corner again, hold one second, lift
+Do not keep your finger on the pad. Do not press Ctrl+C.
 
 EOF
   local finger="${1:-right-index-finger}"

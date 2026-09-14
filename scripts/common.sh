@@ -41,6 +41,34 @@ fp_session_user() {
   fi
 }
 
+require_live_driver() {
+  local so="${LIBDIR}/libfprint-2.so.2"
+  if [[ ! -e "$so" ]]; then
+    red "Patched libfprint is missing. Run: sudo ./install.sh"
+    exit 1
+  fi
+  if ! strings "$so" 2>/dev/null | grep -q 'x403f-waitup-skip'; then
+    red "install.sh has not finished (driver on disk is still the old build)."
+    echo "Wait until it prints 'Install finished', then:"
+    echo "  sudo systemctl restart fprintd"
+    echo "  ./bin/x403f-fp enroll"
+    exit 1
+  fi
+  local pid
+  pid="$(systemctl show -p MainPID --value fprintd 2>/dev/null || true)"
+  if [[ -n "$pid" && "$pid" != 0 && -d "/proc/${pid}" ]]; then
+    local so_mtime proc_mtime
+    so_mtime="$(stat -c %Y "$so" 2>/dev/null || echo 0)"
+    proc_mtime="$(stat -c %Y "/proc/${pid}" 2>/dev/null || echo 0)"
+    if [[ "$so_mtime" -gt "$proc_mtime" ]]; then
+      red "fprintd is still running the previous driver."
+      echo "  sudo systemctl restart fprintd"
+      echo "  ./bin/x403f-fp enroll"
+      exit 1
+    fi
+  fi
+}
+
 detect_spi_acpi() {
   local d
   shopt -s nullglob
