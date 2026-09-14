@@ -15,15 +15,44 @@ index b04154d..defb076 100644
  libsigfm = static_library('sigfm',
          sigfm_sources,
 diff --git a/libfprint/sigfm/sigfm.cpp b/libfprint/sigfm/sigfm.cpp
-index 0781299..5019066 100644
+index 0781299..44309b8 100644
 --- a/libfprint/sigfm/sigfm.cpp
 +++ b/libfprint/sigfm/sigfm.cpp
-@@ -123,7 +123,7 @@ SigfmImgInfo* sigfm_extract(const SigfmPix* pix, int width, int height)
+@@ -35,7 +35,8 @@
+ #include <sstream>
+ #include <string>
+ 
+-#include <opencv2/opencv.hpp>
++#include <cstring>
++#include <opencv2/imgproc.hpp>
+ #include <vector>
+ 
+ namespace bin {
+@@ -60,10 +61,10 @@ struct deserializer<SigfmImgInfo> : public std::true_type {
+ } // namespace bin
+ 
+ namespace {
+-constexpr auto distance_match = 0.75;
++constexpr auto distance_match = 0.8;
+ constexpr auto length_match = 0.05;
+ constexpr auto angle_match = 0.05;
+-constexpr auto min_match = 5;
++constexpr auto min_match = 3;
+ struct match {
+     cv::Point2i p1;
+     cv::Point2i p2;
+@@ -119,11 +120,12 @@ SigfmImgInfo* sigfm_extract(const SigfmPix* pix, int width, int height)
+     cv::Mat img;
+     img.create(height, width, CV_8UC1);
+     std::memcpy(img.data, pix, width * height);
+-    const auto roi = cv::Mat::ones(cv::Size{img.size[1], img.size[0]}, CV_8UC1);
++    cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE(3.0, cv::Size(8, 8));
++    clahe->apply(img, img);
      std::vector<cv::KeyPoint> pts;
  
      cv::Mat descs;
 -    cv::SIFT::create()->detectAndCompute(img, roi, pts, descs);
-+    cv::SIFT::create(128)->detectAndCompute(img, roi, pts, descs);
++    cv::SIFT::create(256, 3, 0.01, 10, 1.2)->detectAndCompute(img, cv::noArray(), pts, descs);
  
      auto* info = new SigfmImgInfo{pts, descs};
      return info;

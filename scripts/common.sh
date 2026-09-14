@@ -56,16 +56,18 @@ require_live_driver() {
     echo "Wait until it prints 'Install finished', then enroll starts."
     exit 1
   fi
-  if grep -aF -q 'x403f: SIGFM match threshold' "$so" 2>/dev/null \
-     || [[ -f "$marker" && "$(cat "$marker" 2>/dev/null || true)" == *sigfm* ]]; then
+  if grep -aF -q 'x403f-press: averaged' "$so" 2>/dev/null \
+     || [[ -f "$marker" && "$(cat "$marker" 2>/dev/null || true)" == *press* ]]; then
     return 0
   fi
-  if grep -aF -q 'x403f-waitup: draining after press' "$so" 2>/dev/null \
-     || grep -aF -q 'x403f-waitup: waiting for press' "$so" 2>/dev/null; then
-    red "This driver enrolls but will not verify (match cutoff is 100)."
-    echo "Rebuild so verify can match the print you already saved:"
+  if grep -aF -q 'x403f: SIGFM match threshold' "$so" 2>/dev/null \
+     || grep -aF -q 'x403f-waitup: draining after press' "$so" 2>/dev/null; then
+    red "This driver still swipe-stitches a press pad, so SIGFM scores stay 0."
+    echo "Rebuild, delete the old print, then enroll again:"
     echo "  cd ~/fingerprint && git pull && sudo ./install.sh"
-    echo "Then run: ./bin/x403f-fp verify   (do not delete the print first)"
+    echo "  fprintd-delete \"\$USER\""
+    echo "  ./bin/x403f-fp enroll"
+    echo "  ./bin/x403f-fp verify"
     exit 1
   fi
   yellow "Could not find driver marker in ${so}; enroll will still try."
@@ -441,7 +443,7 @@ install_system_files() {
   cp -a "${ROOT}/system/." "${PREFIX}/share/x403f-fp/system/"
   ln -sfn "$PREFIX/bin/x403f-fp" /usr/local/bin/x403f-fp
   ln -sfn "$PREFIX/bin/x403f-fp" /usr/bin/x403f-fp
-  printf 'x403f-sigfm-5\n' > "${PREFIX}/share/x403f-fp/DRIVER_MARKER"
+  printf 'x403f-press-avg\n' > "${PREFIX}/share/x403f-fp/DRIVER_MARKER"
 
   set_spidev_bufsiz
 }

@@ -30,6 +30,8 @@ if [[ "${1:-}" == "--apply" ]]; then
   grep -q 'x403f-waitup: draining after press' "$tmp/libfprint/drivers/elanspi.c"
   grep -q 'x403f: SIGFM match threshold' "$tmp/libfprint/drivers/elanspi.c"
   grep -q 'bz3_threshold = 5' "$tmp/libfprint/drivers/elanspi.c"
+  grep -q 'x403f-press: averaged' "$tmp/libfprint/drivers/elanspi.c"
+  grep -q 'FP_SCAN_TYPE_PRESS' "$tmp/libfprint/drivers/elanspi.c"
   echo "patch applies on pinned libfprint commit"
   rm -rf "$tmp"
 fi

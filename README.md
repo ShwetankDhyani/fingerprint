@@ -96,24 +96,20 @@ sudo systemctl restart fprintd
 
 ## If verify never matches
 
-The matcher cutoff used to be 100 (a bozorth3 leftover). SIGFM scores on
-this pad are small integers; rebuild so the cutoff is 5, then verify
-**without deleting** the enrolled print:
+`sigfm score 0/5` on every enrolled stage means the images are not
+repeatable. The X403FA pad is a **press** sensor; swipe-stitching smeared
+each tap. Rebuild averages the press frames instead. Old prints cannot
+be reused:
 
 ```bash
 cd ~/fingerprint && git pull && sudo ./install.sh
-./bin/x403f-fp verify
-```
-
-If journal lines show `sigfm score 0/5`, the image is not repeatable.
-Try rotation, then re-enroll:
-
-```bash
-sudo ./bin/x403f-fp rotate 0    # then 2, 1, 3
 fprintd-delete "$USER"
 ./bin/x403f-fp enroll
 ./bin/x403f-fp verify
 ```
+
+If scores are still 0, try rotation `0`, then `2`, `1`, `3`, re-enrolling
+each time.
 
 ## Commands
 
