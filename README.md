@@ -121,7 +121,7 @@ each time.
 | `x403f-fp enroll [finger]` | default `right-index-finger` |
 | `x403f-fp verify` | test a match |
 | `sudo x403f-fp rotate N` | `0..3`, then re-enroll |
-| `sudo x403f-fp prepare` | reload `spidev` at 32K and restart fprintd |
+| `sudo x403f-fp pam` | fingerprint for login, sudo, and polkit; password remains |
 | `x403f-fp logs` | `journalctl -u fprintd` |
 | `sudo x403f-fp uninstall` | remove `/opt` driver and udev rules |
 

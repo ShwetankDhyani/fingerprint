@@ -486,14 +486,37 @@ enable_pam() {
   if have pam-auth-update; then
     pam-auth-update --enable fprintd --package || true
   fi
-  # Arch / CachyOS: do not touch system-auth (too broad). Local login +
-  # display manager only, password still works because pam_unix stays.
+  # Arch / CachyOS: do not touch system-auth (too broad; would hit SSH).
   local f
   for f in /etc/pam.d/system-local-login /etc/pam.d/sddm /etc/pam.d/sddm-greeter \
            /etc/pam.d/gdm-password /etc/pam.d/gdm-fingerprint /etc/pam.d/kde \
-           /etc/pam.d/kde-fingerprint /etc/pam.d/plasma /etc/pam.d/login; do
+           /etc/pam.d/kde-fingerprint /etc/pam.d/plasma /etc/pam.d/login \
+           /etc/pam.d/sudo /etc/pam.d/sudo-i; do
     ensure_pam_fprintd_line "$f"
   done
+  ensure_polkit_pam
+}
+
+ensure_polkit_pam() {
+  local file=/etc/pam.d/polkit-1
+  if [[ -f "$file" ]] && grep -q 'pam_unix\|include.*system-auth' "$file"; then
+    ensure_pam_fprintd_line "$file"
+    return 0
+  fi
+  # CachyOS/Arch sometimes omit this file. A fingerprint-only stub (from a
+  # failed cat) would break GUI "Authentication required" dialogs.
+  if [[ -f "$file" && ! -f "${file}.x403f.bak" ]]; then
+    cp -a "$file" "${file}.x403f.bak"
+  fi
+  cat > "$file" <<'EOF'
+#%PAM-1.0
+auth      sufficient      pam_fprintd.so timeout=60 maxtries=3
+auth      include         system-auth
+account   include         system-auth
+password  include         system-auth
+session   include         system-auth
+EOF
+  green "Wrote ${file} (fingerprint, then password via system-auth)"
 }
 
 set_rotation() {

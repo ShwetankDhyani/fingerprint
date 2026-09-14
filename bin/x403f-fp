@@ -27,6 +27,7 @@ Usage:
        x403f-fp verify      Test a match
   sudo x403f-fp rotate N    0=none 1=90°left 2=180° 3=90°right (then re-enroll)
   sudo x403f-fp prepare     Reload spidev with a 32K buffer and restart fprintd
+  sudo x403f-fp pam         Enable fingerprint for login, sudo, and polkit prompts
        x403f-fp logs        Tail fprintd / libfprint messages
        x403f-fp help
 
@@ -218,7 +219,9 @@ cmd_uninstall() {
   systemctl restart fprintd.service 2>/dev/null || true
   local bak
   for bak in /etc/pam.d/system-local-login.x403f.bak /etc/pam.d/sddm.x403f.bak \
-             /etc/pam.d/gdm-password.x403f.bak /etc/pam.d/kde.x403f.bak; do
+             /etc/pam.d/gdm-password.x403f.bak /etc/pam.d/kde.x403f.bak \
+             /etc/pam.d/sudo.x403f.bak /etc/pam.d/sudo-i.x403f.bak \
+             /etc/pam.d/polkit-1.x403f.bak; do
     if [[ -f "$bak" ]]; then
       mv "$bak" "${bak%.x403f.bak}"
     fi
@@ -339,6 +342,14 @@ cmd_verify() {
   fi
 }
 
+cmd_pam() {
+  need_root
+  enable_pam
+  green "Fingerprint auth enabled for login, sudo, and polkit (password still works)."
+  echo "Try: sudo -k && sudo true"
+  echo "Press the corner pad when it asks. Type the password if it times out."
+}
+
 cmd_logs() {
   journalctl -u fprintd -e -n 80 --no-pager || true
   echo
@@ -356,6 +367,7 @@ main() {
     status)    cmd_status "$@" ;;
     enroll)    cmd_enroll "$@" ;;
     prepare)   cmd_prepare "$@" ;;
+    pam)       cmd_pam "$@" ;;
     verify)    cmd_verify "$@" ;;
     rotate)    need_root; set_rotation "${1:-}" ;;
     logs)      cmd_logs "$@" ;;
