@@ -43,6 +43,11 @@ sudo systemctl restart fprintd
 
 `install.sh` needs network (to fetch libfprint), a compiler, and a few minutes.
 
+CachyOS / Arch ship **OpenCV 5**, which provides `opencv5.pc` and no longer
+`opencv4.pc`. The installer patches SIGFM’s Meson file to accept either name.
+If meson stops on `Dependency "opencv4" not found`, `git pull` and re-run
+`sudo ./install.sh`.
+
 ### SPI buffer (`Permission denied` on bufsiz)
 
 CachyOS ships `spidev.bufsiz` as a **read-only** sysfs file. This always fails,

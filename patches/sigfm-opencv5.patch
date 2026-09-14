@@ -1,3 +1,19 @@
+diff --git a/libfprint/sigfm/meson.build b/libfprint/sigfm/meson.build
+index b04154d..defb076 100644
+--- a/libfprint/sigfm/meson.build
++++ b/libfprint/sigfm/meson.build
+@@ -1,8 +1,9 @@
+ 
+ sigfm_sources = ['sigfm.cpp']
+ 
+-opencv = dependency('opencv4', required: true, version: '>=4.5.0')
+-doctest = dependency('doctest', required: true, version: ['>=2.0.0', '<3.0.0'])
++# CachyOS/Arch OpenCV 5 ships opencv5.pc, not opencv4.pc.
++opencv = dependency('opencv5', 'opencv4', required: true)
++doctest = dependency('doctest', required: true)
+ 
+ libsigfm = static_library('sigfm',
+         sigfm_sources,
 diff --git a/libfprint/sigfm/sigfm.cpp b/libfprint/sigfm/sigfm.cpp
 index 0781299..a4ba730 100644
 --- a/libfprint/sigfm/sigfm.cpp

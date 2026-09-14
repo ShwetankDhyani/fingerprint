@@ -337,6 +337,10 @@ apply_patch() {
   git -C "$BUILD_DIR" apply "${ROOT}/patches/elanspi-x403f.patch"
   git -C "$BUILD_DIR" apply --check "${ROOT}/patches/sigfm-opencv5.patch"
   git -C "$BUILD_DIR" apply "${ROOT}/patches/sigfm-opencv5.patch"
+  if ! grep -q "dependency('opencv5'" "${BUILD_DIR}/libfprint/sigfm/meson.build"; then
+    red "OpenCV 5 Meson fallback missing after patch. Cannot build on CachyOS."
+    exit 1
+  fi
 }
 
 ensure_doctest_pkgconfig() {
@@ -365,7 +369,13 @@ EOF
 }
 
 build_libfprint() {
-  if ! pkg-config --exists opencv5 && ! pkg-config --exists opencv4 && ! pkg-config --exists opencv; then
+  if pkg-config --exists opencv5; then
+    echo "OpenCV pkg-config: opencv5 $(pkg-config --modversion opencv5)"
+  elif pkg-config --exists opencv4; then
+    echo "OpenCV pkg-config: opencv4 $(pkg-config --modversion opencv4)"
+  elif pkg-config --exists opencv; then
+    echo "OpenCV pkg-config: opencv $(pkg-config --modversion opencv)"
+  else
     red "OpenCV pkg-config file not found (looked for opencv5, opencv4, opencv)."
     echo "Installed opencv-related pkg-config modules:"
     pkg-config --list-all 2>/dev/null | grep -i opencv || echo "  (none)"

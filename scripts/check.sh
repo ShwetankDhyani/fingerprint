@@ -21,9 +21,12 @@ if [[ "${1:-}" == "--apply" ]]; then
   git -C "$tmp" checkout --force FETCH_HEAD >/dev/null
   git -C "$tmp" apply --check "${ROOT}/patches/elanspi-x403f.patch"
   git -C "$tmp" apply "${ROOT}/patches/elanspi-x403f.patch"
+  git -C "$tmp" apply --check "${ROOT}/patches/sigfm-opencv5.patch"
+  git -C "$tmp" apply "${ROOT}/patches/sigfm-opencv5.patch"
   grep -q '0x3128' "$tmp/libfprint/drivers/elanspi.h"
   grep -q 'FPI_DEVICE_ALGO_SIGFM' "$tmp/libfprint/drivers/elanspi.c"
   grep -q 'entry->hid_id.pid == 0' "$tmp/libfprint/fp-context.c"
+  grep -q "dependency('opencv5'" "$tmp/libfprint/sigfm/meson.build"
   echo "patch applies on pinned libfprint commit"
   rm -rf "$tmp"
 fi
