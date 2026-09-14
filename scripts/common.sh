@@ -160,14 +160,14 @@ pacman_install_deps() {
   # Avoid -Sy: it needs the db lock longer and can conflict with CachyOS Hello / Pamac.
   if ! pacman -S --needed --noconfirm \
     git meson ninja gcc pkgconf base-devel \
-    glib2 libgusb libgudev pixman nss polkit \
+    glib2 glib2-devel libgusb libgudev pixman nss polkit \
     opencv doctest \
     fprintd \
     usbutils pciutils kmod; then
     wait_for_pacman_lock
     pacman -Sy --needed --noconfirm \
-      git meson ninja gcc pkgconf base-devel \
-      glib2 libgusb libgudev pixman nss polkit \
+    git meson ninja gcc pkgconf base-devel \
+    glib2 glib2-devel libgusb libgudev pixman nss polkit \
       opencv doctest \
       fprintd \
       usbutils pciutils kmod
@@ -241,6 +241,15 @@ build_libfprint() {
     red "OpenCV pkg-config file not found (looked for opencv5, opencv4, opencv)."
     echo "Installed opencv-related pkg-config modules:"
     pkg-config --list-all 2>/dev/null | grep -i opencv || echo "  (none)"
+    exit 1
+  fi
+  if ! have glib-mkenums && have pacman; then
+    yellow "Installing glib2-devel (provides /usr/bin/glib-mkenums)"
+    wait_for_pacman_lock
+    pacman -S --needed --noconfirm glib2-devel
+  fi
+  if ! have glib-mkenums; then
+    red "glib-mkenums not found. On CachyOS/Arch: sudo pacman -S glib2-devel"
     exit 1
   fi
   ensure_doctest_pkgconfig
