@@ -15,10 +15,19 @@ index b04154d..defb076 100644
  libsigfm = static_library('sigfm',
          sigfm_sources,
 diff --git a/libfprint/sigfm/sigfm.cpp b/libfprint/sigfm/sigfm.cpp
-index 0781299..9c03e68 100644
+index 0781299..1a62fd1 100644
 --- a/libfprint/sigfm/sigfm.cpp
 +++ b/libfprint/sigfm/sigfm.cpp
-@@ -35,7 +35,10 @@
+@@ -28,14 +28,19 @@
+ #include "opencv2/features2d.hpp"
+ #include "opencv2/imgcodecs.hpp"
+ #include <algorithm>
++#include <cmath>
+ #include <cstdio>
++#include <cstdlib>
+ #include <filesystem>
+ #include <fstream>
+ #include <iterator>
  #include <sstream>
  #include <string>
  
@@ -29,31 +38,104 @@ index 0781299..9c03e68 100644
  #include <vector>
  
  namespace bin {
-@@ -60,10 +63,10 @@ struct deserializer<SigfmImgInfo> : public std::true_type {
+@@ -60,10 +65,10 @@ struct deserializer<SigfmImgInfo> : public std::true_type {
  } // namespace bin
  
  namespace {
 -constexpr auto distance_match = 0.75;
-+constexpr auto distance_match = 0.8;
- constexpr auto length_match = 0.05;
- constexpr auto angle_match = 0.05;
+-constexpr auto length_match = 0.05;
+-constexpr auto angle_match = 0.05;
 -constexpr auto min_match = 5;
++constexpr auto distance_match = 0.85;
++constexpr auto length_match = 0.20;
++constexpr auto angle_match = 0.20;
 +constexpr auto min_match = 3;
  struct match {
      cv::Point2i p1;
      cv::Point2i p2;
-@@ -119,11 +122,12 @@ SigfmImgInfo* sigfm_extract(const SigfmPix* pix, int width, int height)
+@@ -119,11 +124,11 @@ SigfmImgInfo* sigfm_extract(const SigfmPix* pix, int width, int height)
      cv::Mat img;
      img.create(height, width, CV_8UC1);
      std::memcpy(img.data, pix, width * height);
 -    const auto roi = cv::Mat::ones(cv::Size{img.size[1], img.size[0]}, CV_8UC1);
-+    cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE(3.0, cv::Size(8, 8));
-+    clahe->apply(img, img);
++    cv::equalizeHist(img, img);
      std::vector<cv::KeyPoint> pts;
  
      cv::Mat descs;
 -    cv::SIFT::create()->detectAndCompute(img, roi, pts, descs);
-+    cv::SIFT::create(256, 3, 0.01, 10, 1.2)->detectAndCompute(img, cv::noArray(), pts, descs);
++    cv::SIFT::create(128)->detectAndCompute(img, cv::noArray(), pts, descs);
  
      auto* info = new SigfmImgInfo{pts, descs};
      return info;
+@@ -132,6 +137,11 @@ SigfmImgInfo* sigfm_extract(const SigfmPix* pix, int width, int height)
+ int sigfm_match_score(SigfmImgInfo* frame, SigfmImgInfo* enrolled)
+ {
+     try {
++        if (!frame || !enrolled || frame->descriptors.empty() ||
++            enrolled->descriptors.empty() || frame->descriptors.rows < 2 ||
++            enrolled->descriptors.rows < 2)
++            return 0;
++
+         std::vector<std::vector<cv::DMatch>> points;
+         auto bfm = cv::BFMatcher::create();
+         bfm->knnMatch(frame->descriptors, enrolled->descriptors, points, 2);
+@@ -150,11 +160,27 @@ int sigfm_match_score(SigfmImgInfo* frame, SigfmImgInfo* enrolled)
+             }
+         }
+         if (nb_matched < min_match) {
++            std::fprintf(stderr, "x403f: sigfm lowe=%d geom=0 consensus=0\n",
++                         nb_matched);
+             return 0;
+         }
+         std::vector<match> matches{matches_unique.begin(),
+                                    matches_unique.end()};
+ 
++        int consensus = 0;
++        for (std::size_t i = 0; i < matches.size(); i++) {
++            int dx = matches[i].p2.x - matches[i].p1.x;
++            int dy = matches[i].p2.y - matches[i].p1.y;
++            int c = 0;
++            for (std::size_t j = 0; j < matches.size(); j++) {
++                int dx2 = matches[j].p2.x - matches[j].p1.x;
++                int dy2 = matches[j].p2.y - matches[j].p1.y;
++                if (std::abs(dx - dx2) <= 4 && std::abs(dy - dy2) <= 4)
++                    c++;
++            }
++            consensus = std::max(consensus, c);
++        }
++
+         std::vector<angle> angles;
+         for (std::size_t j = 0; j < matches.size(); j++) {
+             match match_1 = matches[j];
+@@ -169,6 +195,8 @@ int sigfm_match_score(SigfmImgInfo* frame, SigfmImgInfo* enrolled)
+                 double length_1 = sqrt(pow(vec_1[0], 2) + pow(vec_1[1], 2));
+                 double length_2 = sqrt(pow(vec_2[0], 2) + pow(vec_2[1], 2));
+ 
++                if (length_1 < 1 || length_2 < 1)
++                    continue;
+                 if (1 - std::min(length_1, length_2) /
+                             std::max(length_1, length_2) <=
+                     length_match) {
+@@ -185,10 +213,6 @@ int sigfm_match_score(SigfmImgInfo* frame, SigfmImgInfo* enrolled)
+             }
+         }
+ 
+-        if (angles.size() < min_match) {
+-            return 0;
+-        }
+-
+         int count = 0;
+         for (std::size_t j = 0; j < angles.size(); j++) {
+             angle angle_1 = angles[j];
+@@ -206,7 +230,10 @@ int sigfm_match_score(SigfmImgInfo* frame, SigfmImgInfo* enrolled)
+                 }
+             }
+         }
+-        return count;
++        std::fprintf(stderr,
++                     "x403f: sigfm lowe=%d geom=%d consensus=%d\n",
++                     nb_matched, count, consensus);
++        return consensus;
+     }
+     catch (...) {
+         return -1;

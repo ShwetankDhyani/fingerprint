@@ -96,10 +96,10 @@ sudo systemctl restart fprintd
 
 ## If verify never matches
 
-`sigfm score 0/5` on every enrolled stage means the images are not
-repeatable. The X403FA pad is a **press** sensor; swipe-stitching smeared
-each tap. Rebuild averages the press frames instead. Old prints cannot
-be reused:
+`sigfm score 0/5` with ~100 keypoints means the geometric SIGFM
+filter rejected every correspondence on this tiny press. Rebuild
+uses 2× scaling plus a translation-consensus score. Old prints
+cannot be reused:
 
 ```bash
 cd ~/fingerprint && git pull && sudo ./install.sh

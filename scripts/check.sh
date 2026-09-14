@@ -32,6 +32,8 @@ if [[ "${1:-}" == "--apply" ]]; then
   grep -q 'bz3_threshold = 5' "$tmp/libfprint/drivers/elanspi.c"
   grep -q 'x403f-press: averaged' "$tmp/libfprint/drivers/elanspi.c"
   grep -q 'FP_SCAN_TYPE_PRESS' "$tmp/libfprint/drivers/elanspi.c"
+  grep -q 'elanspi_scale2x' "$tmp/libfprint/drivers/elanspi.c"
+  grep -q 'sigfm lowe=' "$tmp/libfprint/sigfm/sigfm.cpp"
   grep -q '#include <set>' "$tmp/libfprint/sigfm/sigfm.cpp"
   echo "patch applies on pinned libfprint commit"
   rm -rf "$tmp"

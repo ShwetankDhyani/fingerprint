@@ -56,13 +56,13 @@ require_live_driver() {
     echo "Wait until it prints 'Install finished', then enroll starts."
     exit 1
   fi
-  if grep -aF -q 'x403f-press: averaged' "$so" 2>/dev/null \
-     || [[ -f "$marker" && "$(cat "$marker" 2>/dev/null || true)" == *press* ]]; then
+  if grep -aF -q 'frames %ux%u ->' "$so" 2>/dev/null \
+     || grep -aF -q 'x403f: sigfm lowe=' "$so" 2>/dev/null; then
     return 0
   fi
-  if grep -aF -q 'x403f: SIGFM match threshold' "$so" 2>/dev/null \
-     || grep -aF -q 'x403f-waitup: draining after press' "$so" 2>/dev/null; then
-    red "This driver still swipe-stitches a press pad, so SIGFM scores stay 0."
+  if grep -aF -q 'x403f-press: averaged' "$so" 2>/dev/null \
+     || grep -aF -q 'x403f: SIGFM match threshold' "$so" 2>/dev/null; then
+    red "This matcher still used swipe-style SIGFM geometry on a 96x43 press."
     echo "Rebuild, delete the old print, then enroll again:"
     echo "  cd ~/fingerprint && git pull && sudo ./install.sh"
     echo "  fprintd-delete \"\$USER\""
@@ -443,7 +443,7 @@ install_system_files() {
   cp -a "${ROOT}/system/." "${PREFIX}/share/x403f-fp/system/"
   ln -sfn "$PREFIX/bin/x403f-fp" /usr/local/bin/x403f-fp
   ln -sfn "$PREFIX/bin/x403f-fp" /usr/bin/x403f-fp
-  printf 'x403f-press-avg\n' > "${PREFIX}/share/x403f-fp/DRIVER_MARKER"
+  printf 'x403f-press-consensus\n' > "${PREFIX}/share/x403f-fp/DRIVER_MARKER"
 
   set_spidev_bufsiz
 }
